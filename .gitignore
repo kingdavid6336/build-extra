@@ -1,6 +1,7 @@
 *.pdb
 *.sig
 *.swp
+/.vs/
 /ReleaseNotes.html
 edit-git-bash.exe
 /cached-source-packages/
@@ -13,7 +14,9 @@ edit-git-bash.exe
 /git-for-windows-keyring/git-for-windows-keyring-*.src.tar.gz
 /installer/InnoSetup/Examples/
 /installer/InnoSetup/Compil32.exe
+/installer/InnoSetup/ISIDE.exe
 /installer/InnoSetup/isscint.dll
+/installer/InnoSetup/isscint-x64.dll
 /installer/ReleaseNotes.html
 /installer/config.iss
 /installer/install.log
@@ -25,12 +28,12 @@ edit-git-bash.exe
 /mingit/root/
 /mingit/sorted-all
 /mingit/sorted-libexec-exes
-/mingw-w64-git-credential-manager-core/pkg/
-/mingw-w64-git-credential-manager-core/src/
-/mingw-w64-git-credential-manager-core/*.pkg.tar.*
-/mingw-w64-git-credential-manager-core/*.src.tar.gz
-/mingw-w64-git-credential-manager-core/gcmcore-*.zip
-/mingw-w64-git-credential-manager-core/v[1-9]*.zip
+/mingw-w64-git-credential-manager/pkg/
+/mingw-w64-git-credential-manager/src/
+/mingw-w64-git-credential-manager/*.pkg.tar.*
+/mingw-w64-git-credential-manager/*.src.tar.gz
+/mingw-w64-git-credential-manager/gcm-*.zip
+/mingw-w64-git-credential-manager/v[1-9]*.zip
 /mingw-w64-wintoast/mingw-w64-*-wintoast-*-any.pkg.tar.xz
 /mingw-w64-wintoast/pkg
 /mingw-w64-wintoast/src
@@ -50,8 +53,9 @@ edit-git-bash.exe
 /portable/root/bin/
 /portable/root/cmd/
 /portable/root/etc/
+/portable/root/clangarm64/
 /portable/root/mingw32/
-/portable/root/mingw64/
+/portable/root/ucrt64/
 /portable/root/post-install.bat
 /sdk-installer/root/
 /source-zips/

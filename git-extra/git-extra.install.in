@@ -18,26 +18,24 @@ GITATTRIBUTES
 		-e 's/^\*\.DOT\(.*\)/&\n*.dotm\1\n*.DOTM\1/' \
 		"$ETC_GITATTRIBUTES"
 
-	for dir in mingw32 mingw64
-	do
-		# Drop git-wrapper in place of builtins "to save space"
-		git_wrapper=/$dir/share/git/git-wrapper.exe
-		if test -f $git_wrapper &&
-			! cmp -s $git_wrapper /$dir/bin/git-receive-pack.exe
-		then
-			for b in $(cat /$dir/share/git/builtins.txt)
-			do
-				rm /$dir/libexec/git-core/$b &&
-				ln $git_wrapper /$dir/libexec/git-core/$b
+	# Drop git-wrapper in place of builtins "to save space"
+	git_wrapper=@@MINGW_PREFIX@@/share/git/git-wrapper.exe
+	if test -f $git_wrapper &&
+		! cmp -s $git_wrapper @@MINGW_PREFIX@@/libexec/git-core/git-receive-pack.exe
+	then
+		for b in $(cat @@MINGW_PREFIX@@/share/git/builtins.txt)
+		do
+			test ! -f @@MINGW_PREFIX@@/libexec/git-core/$b ||
+			rm @@MINGW_PREFIX@@/libexec/git-core/$b &&
+			ln $git_wrapper @@MINGW_PREFIX@@/libexec/git-core/$b
 
-				if test -x /$dir/bin/$b
-				then
-					rm /$dir/bin/$b &&
-					ln $git_wrapper /$dir/bin/$b
-				fi
-			done
-		fi
-	done
+			if test -x @@MINGW_PREFIX@@/bin/$b
+			then
+				rm @@MINGW_PREFIX@@/bin/$b &&
+				ln $git_wrapper @@MINGW_PREFIX@@/bin/$b
+			fi
+		done
+	fi
 
 	grep -q '^db_home: env windows' /etc/nsswitch.conf ||
 	sed -i 's/^\(db_home: \)\(windows \)\?\([^w]\)/\1env windows \3/' \
@@ -61,39 +59,51 @@ GITATTRIBUTES
 	grep -q '^# Fixup git-bash in non login env' /etc/bash.bashrc ||
 	printf "\n# Fixup git-bash in non login env\nshopt -q login_shell || . /etc/profile.d/git-prompt.sh\n" >> /etc/bash.bashrc
 
-	uname_m="$(uname -m)"
-	case "$uname_m" in
-	i686)
-		arch=i686
-		otherarch=x86-64
-		otherpacman=git-for-windows-mingw64
-		;;
-	x86_64)
-		arch=x86-64
-		otherarch=i686
-		otherpacman=git-for-windows-mingw32
-		;;
-	esac
+	! grep -q '^\[git-for-windows\]$' etc/pacman.conf ||
+	sed -i -e 's/^\(\[git-for-windows\)\(\]\)$/\1-@@MSYSTEM_CARCH@@\2/' etc/pacman.conf
+
+	! grep -q wingit.blob.core.windows.net etc/pacman.conf ||
+	sed -i -e '/https:\/\/wingit\.blob\.core\.windows\.net\//{
+		s|x86-64|x86_64|
+		s|https://[^/]*|https://raw.githubusercontent.com/git-for-windows/pacman-repo/refs/heads|
+	}' etc/pacman.conf
 
 	grep -q git-for-windows[^-] etc/pacman.conf ||
-	sed -i -e '/^\[mingw32\]/i[git-for-windows]\nServer = https://wingit.blob.core.windows.net/'$arch'\n' etc/pacman.conf
+	sed -i -e '/^\[mingw32\]/i[git-for-windows-@@MSYSTEM_CARCH@@]\nServer = https://raw.githubusercontent.com/git-for-windows/pacman-repo/refs/heads/@@MSYSTEM_CARCH@@\n' etc/pacman.conf
 
 	! grep -A2 git-for-windows[^-] etc/pacman.conf |
 	grep -q '^SigLevel = Optional' ||
-	sed -i -e '/\[git-for-windows\]/{N;N;s/\nSigLevel = Optional//}' \
+	sed -i -e '/\[git-for-windows-@@MSYSTEM_CARCH@@\]/{N;N;s/\nSigLevel = Optional//}' \
 		etc/pacman.conf
 
-	grep -q "$otherpacman" etc/pacman.conf ||
-	sed -i -e '/^\[mingw32\]/i['$otherpacman']\nServer = https://wingit.blob.core.windows.net/'$otherarch'\n' etc/pacman.conf
+	grep -q "@@OTHER_ARCH_DB@@" etc/pacman.conf ||
+	sed -i -e '/^\[mingw32\]/i[@@OTHER_ARCH_DB@@]\nServer = https://raw.githubusercontent.com/git-for-windows/pacman-repo/refs/heads/@@OTHER_ARCH@@\n' etc/pacman.conf
+
+	@@IF_CLANGARM64@@
+	grep -q "git-for-windows-aarch64" etc/pacman.conf || # then add Git for Windows' aarch64 repository (unless it's already added)
+	sed -i -e '/^\[clangarm64]/i[git-for-windows-aarch64]\nServer = https://raw.githubusercontent.com/git-for-windows/pacman-repo/refs/heads/aarch64\n' etc/pacman.conf
+	@@ENDIF_CLANGARM64@@
 
 	! grep -q 'https://dl.bintray.com/\$repo/pacman/\$arch' etc/pacman.conf ||
-	sed -i -e 's/https:\/\/dl\.bintray\.com\/\$repo\/pacman\/\$arch/https:\/\/wingit.blob.core.windows.net\/'$arch'/g' etc/pacman.conf
+	sed -i -e 's/https:\/\/dl\.bintray\.com\/\$repo\/pacman\/\$arch/https:\/\/wingit.blob.core.windows.net\/@@MSYSTEM_CARCH@@/g' etc/pacman.conf
 
 	! grep -q 'https://dl.bintray.com/git-for-windows/pacman/i686' etc/pacman.conf ||
 	sed -i -e 's/https:\/\/dl\.bintray\.com\/git-for-windows\/pacman\/i686/https:\/\/wingit.blob.core.windows.net\/i686/g' etc/pacman.conf
 
 	! grep -q 'https://dl.bintray.com/git-for-windows/pacman/x86_64' etc/pacman.conf ||
 	sed -i -e 's/https:\/\/dl\.bintray\.com\/git-for-windows\/pacman\/x86_64/https:\/\/wingit.blob.core.windows.net\/x86-64/g' etc/pacman.conf
+
+	# The main pacman database was renamed from `git-for-windows` to `git-for-windows-<arch>`
+	for ext in db db.sig files files.sig
+	do
+		if ! test -f var/lib/pacman/sync/git-for-windows-@@MSYSTEM_CARCH@@.$ext
+		then
+			mv var/lib/pacman/sync/git-for-windows.$ext var/lib/pacman/sync/git-for-windows-@@MSYSTEM_CARCH@@.$ext
+		elif test -f var/lib/pacman/sync/git-for-windows.$ext
+		then
+			rm var/lib/pacman/sync/git-for-windows.$ext
+		fi
+	done
 
 	test i686 != $"uname -m" ||
 	case "$(md5sum.exe < /msys2.ico)" in
@@ -102,6 +112,10 @@ GITATTRIBUTES
 
 	test ! -f /etc/post-install/05-home-dir.post ||
 	rm /etc/post-install/05-home-dir.post
+
+	! grep -q CHERE_INVOKING /etc/profile.d/000-msys2.sh ||
+	sed -i '/\(Set the user id\|Start MSYS in selected folder\|CHERE_INVOKING\)/,/^fi/d' \
+		/etc/profile.d/000-msys2.sh
 
 	grep -qw usertemp /etc/fstab ||
 	sed -i '$a\
@@ -167,15 +181,15 @@ test -d "$TMPDIR" || test ! -d "$TMP" || {\
 	pacman-key --list-keys BB3AA74136C569BB >/dev/null ||
 	pacman-key --populate git-for-windows
 
-	# .bat files in /mingw{32,64}/bin are non-portable because they
+	# .bat files in $MINGW_PREFIX/bin are non-portable because they
 	# typically contain absolute paths
-	find /mingw*/bin/ -name \*.bat -exec rm {} \;
+	find @@MINGW_PREFIX@@/bin/ -name \*.bat -exec rm {} \;
 
 	# absolute paths in the she-bang lines must be POSIX paths, not
 	# Windows paths, otherwise the SDK won't be portable
 	root="$(cygpath -am / | sed 's/\/$//')" &&
 	rootw="$(echo "$root" | sed "s/\//\\\\&/g")" &&
-	for s in $(grep -l "#\!$root/" $(find /mingw*/bin/ -size -17k -type f))
+	for s in $(grep -l "#\!$root/" $(find @@MINGW_PREFIX@@/bin/ -size -17k -type f))
 	do
 		sed -i "1s/#\!$rootw/#\!/" $s || break
 	done
@@ -187,11 +201,9 @@ test -d "$TMPDIR" || test ! -d "$TMP" || {\
 		! grep -q '^Ciphers [a-z].*cbc' /etc/ssh/ssh_config ||
 		sed -i -e 's/^Ciphers [a-z].*cbc/#   &/' /etc/ssh/ssh_config
 
-		grep -q '^Ciphers\s\++' /etc/ssh/ssh_config ||
-		printf '%s\n%s\n' \
-			'# Added by git-extra' \
-			'Ciphers +aes128-cbc,3des-cbc,aes256-cbc,aes192-cbc' \
-			>>/etc/ssh/ssh_config
+		# Revert change by prior versions of git-extra.
+		! grep -q '^Ciphers\s\++' /etc/ssh/ssh_config ||
+		sed -i -e '/^# Added by git-extra/{N;/^\(.*\n\)\?Ciphers +[a-z].*cbc/d}' /etc/ssh/ssh_config
 
 		grep -q '^Host\s\+ssh\.dev\.azure\.com' /etc/ssh/ssh_config ||
 		printf '%s\n%s\n\t%s\n\t%s\n' \
@@ -211,10 +223,12 @@ test -d "$TMPDIR" || test ! -d "$TMP" || {\
 	}
 
 	# Enable color and syntax-highlighting in GNU nano
-	test ! -f /etc/nanorc ||
-	grep -q '^set titlecolor' /etc/nanorc ||
-	sed -i -e '/Paint the interface elements/,/root.s .nanorc/s/^# //' \
-		-e 's/^# \(include .*nanorc"\)$/\1/' /etc/nanorc
+	test ! -f /etc/nanorc || {
+		grep -q '^set titlecolor' /etc/nanorc ||
+		sed -i '/Paint the interface elements/,/root.s .nanorc/s/^# //' /etc/nanorc
+		grep -q '^include .*\*\.nanorc' /etc/nanorc ||
+		sed -i 's/^# \(include .*\*\.nanorc"\?\)$/\1/' /etc/nanorc
+	}
 
 	# Do not require /usr/bin/cmd in /usr/bin/start
 	grep -q '^"\$COMSPEC" ' /usr/bin/start ||
@@ -222,16 +236,10 @@ test -d "$TMPDIR" || test ! -d "$TMP" || {\
 
 	# Undo the damage of
 	# https://github.com/mirror/mingw-w64/commit/69effce76945e
-	for dir in mingw32 mingw64
-	do
-		case "$dir" in
-		*32) header=/$dir/i686-w64-mingw32/include/pthread_unistd.h;;
-		*64) header=/$dir/x86_64-w64-mingw32/include/pthread_unistd.h;;
-		esac
-		test ! -e $header ||
-		grep -q '^#define _POSIX_THREAD_SAFE_FUNCTIONS' $header ||
-		sed -i '$i#undef _POSIX_THREAD_SAFE_FUNCTIONS\n#define _POSIX_THREAD_SAFE_FUNCTIONS 200112L\n' $header
-	done
+	header=@@MINGW_PREFIX@@/@@MINGW_CHOST@@/include/pthread_unistd.h
+	test ! -e $header ||
+	grep -q '^#define _POSIX_THREAD_SAFE_FUNCTIONS' $header ||
+	sed -i '$i#undef _POSIX_THREAD_SAFE_FUNCTIONS\n#define _POSIX_THREAD_SAFE_FUNCTIONS 200112L\n' $header
 
 	# We do not actually need the http.sslCAInfo setting anymore, as the
 	# cURL we ship with Git for Windows was patched to find the location of
@@ -240,6 +248,17 @@ test -d "$TMPDIR" || test ! -d "$TMP" || {\
 	! grep -q '^	sslCAinfo = /ssl/certs/ca-bundle.crt$' /etc/gitconfig ||
 	sed -i -e 's/^	sslCAinfo = \/ssl\/certs\/ca-bundle\.crt$/#&/' /etc/gitconfig
 
+	# We no longer want to configure `color.diff`, `color.status` and `color.branch`
+	# by default.
+	test ! -f $ETC_GITCONFIG || # just a little defensive programming
+	test -z "$(sed -n '/^\[color\]/{N;/\(diff\|status\|branch\) = auto/p}' <$ETC_GITCONFIG)" || {
+		git config -f $ETC_GITCONFIG color.ui auto &&
+		for key in diff status branch
+		do
+			git config -f $ETC_GITCONFIG --unset color.$key # ignore errors, e.g. if already unset
+		done
+	}
+
 	# Previously, we made sure that `/ssl` is a symbolic link pointing to
 	# `/usr/ssl` so that the http.sslCAInfo setting could be shared between
 	# the MSYS and the MINGW variants of `git.exe`.
@@ -247,31 +266,17 @@ test -d "$TMPDIR" || test ! -d "$TMP" || {\
 	# As we no longer need it, delete it.
 	test ! -h /ssl || rm /ssl
 
-	# Allow an i686 version of Git for Windows, augmented by `/arm64/*`, to serve
-	# as sort of an ARM64 version of Git for Windows (because Windows/ARM64 can run
-	# i686 executables via a built-in emulator).
-	test i686 != "$arch" ||
-	grep -q '^ARM64)$' /etc/profile ||
-	sed -i '/^MINGW64)/{
-		# read entire `case` arm until `;;`
-		:1;N;/[^;]$/b1;
+	# Work around /etc/xml/catalog being updated using the MINGW version of xmlcatalog
+	! grep -q '"[CD]:/' /etc/xml/catalog ||
+	sed -i -e 's|"[CD]:/[^"]*/usr/|"/usr/|g' /etc/xml/catalog
 
-		# print out the MINGW64 `case` arm unchanged
-		p;
-
-		# now, transmogrify it into the ARM64 `case` arm:
-		s|^MINGW|ARM|;
-		# change the MINGW_PREFIX
-		s|\${MINGW_PREFIX}|/arm64|;
-		# add the /mingw32/bin fall-back to the PATH
-		s| PATH=[^:]*|&:/mingw32/bin|;
-		# adjust the pkgconfig path
-		s|/share/pkgconfig|&:/mingw32/lib/pkgconfig:/mingw32/share/pkgconfig|;
-		# adjust autoconf path
-		s|:/usr/share/aclocal|:/mingw32/share/aclocal&|;
-		# add the /mingw32 fall-back paths to MANPATH
-		s|:\${MANPATH}|:/mingw32/local/man:/mingw32/share/man&|
-	}' /etc/profile
+	# Remove work around for an outdated i686 gnupg/gnutls build that depended on a hence-updated libunistring
+	if test i686 = "@@MSYSTEM_CARCH@@" -a -e /usr/bin/msys-unistring-2.dll &&
+		! pacman -Qoq /usr/bin/msys-unistring-2.dll >/dev/null 2>&1 &&
+		! grep -q msys-unistring-2 /usr/bin/msys-gnutls-30.dll 2>&1 >/dev/null
+	then
+		rm /usr/bin/msys-unistring-2.dll
+	fi
 }
 
 post_upgrade () {

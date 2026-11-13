@@ -12,6 +12,14 @@ test -n "$SSH_ASKPASS" || {
 			export SSH_ASKPASS=/mingw64/libexec/git-core/git-gui--askpass
 		fi
 		;;
+	UCRT64)
+		export DISPLAY=needs-to-be-defined
+		if [ -f /ucrt64/bin/git-askpass.exe ]; then
+			export SSH_ASKPASS=/ucrt64/bin/git-askpass.exe
+		else
+			export SSH_ASKPASS=/ucrt64/libexec/git-core/git-gui--askpass
+		fi
+		;;
 	MINGW32)
 		export DISPLAY=needs-to-be-defined
 		if [ -f /mingw32/bin/git-askpass.exe ]; then
@@ -20,14 +28,12 @@ test -n "$SSH_ASKPASS" || {
 			export SSH_ASKPASS=/mingw32/libexec/git-core/git-gui--askpass
 		fi
 		;;
-	ARM64)
+	CLANGARM64)
 		export DISPLAY=needs-to-be-defined
-		if [ -f /arm64/bin/git-askpass.exe ]; then
-			export SSH_ASKPASS=/arm64/bin/git-askpass.exe
-		elif [ -f /mingw32/bin/git-askpass.exe ]; then
-			export SSH_ASKPASS=/mingw32/bin/git-askpass.exe
+		if [ -f /clangarm64/bin/git-askpass.exe ]; then
+			export SSH_ASKPASS=/clangarm64/bin/git-askpass.exe
 		else
-			export SSH_ASKPASS=/mingw32/libexec/git-core/git-gui--askpass
+			export SSH_ASKPASS=/clangarm64/libexec/git-core/git-gui--askpass
 		fi
 		;;
 	esac

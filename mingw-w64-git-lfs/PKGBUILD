@@ -3,7 +3,7 @@
 _realname="git-lfs"
 pkgbase="mingw-w64-${_realname}"
 pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
-pkgver=3.0.2
+pkgver=3.8.1
 pkgrel=1
 pkgdesc="An open source Git extension for versioning large files"
 install=git-lfs.install
@@ -16,14 +16,20 @@ groups=('VCS')
 case "$CARCH" in
 i686)
   zipname="git-lfs-windows-386-v$pkgver.zip"
-  folder=.
-  sha256sum=d22a17621b08f716832ad752695dfce57ccf72a339eba8b4d89ff236bd7621e8
+  folder=git-lfs-$pkgver/
+  sha256sum=d036588bd9027b7bf2a57e9fcb476ab95880f078d9b0a622869f397fb9030088
   exesuffix=
   ;;
 x86_64)
   zipname="git-lfs-windows-amd64-v$pkgver.zip"
-  folder=.
-  sha256sum=c8cdf273554262667c2f88f3e8f54c1e3c54230c20bd7d6f8917aaf97ee85d7f
+  folder=git-lfs-$pkgver/
+  sha256sum=5bb771c12b3dacc535e912d0270a010c209d4da2e63819c5918e3547c2defed9
+  exesuffix=
+  ;;
+aarch64)
+  zipname="git-lfs-windows-arm64-v$pkgver.zip"
+  folder=git-lfs-$pkgver/
+  sha256sum=7e70990e339efab3e793affb919355b548c9a41c5b6bb52d90267bcb84ba4784
   exesuffix=
   ;;
 esac
@@ -42,4 +48,10 @@ package() {
   install -m755 $srcdir/$folder/git-lfs$exesuffix.exe $pkgdir/$MINGW_PREFIX/bin/git-lfs.exe
   install -d -m755 $pkgdir/$MINGW_PREFIX/share/doc/git-lfs
   install -m755 $srcdir/$folder/README.md $pkgdir/$MINGW_PREFIX/share/doc/git-lfs/README.md
+  install -d -m755 $pkgdir/$MINGW_PREFIX/share/doc/git-doc
+  for f in $srcdir/$folder/man/html/git-lfs*.1.html
+  do
+    ff=${f##*/}
+    install -m755 $f $pkgdir/$MINGW_PREFIX/share/doc/git-doc/${ff%.1.html}.html
+  done
 }

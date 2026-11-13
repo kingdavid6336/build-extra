@@ -66,8 +66,11 @@ generate_package_gitignore () {
 		die "$1: not installed?"
 		;;
 	*)
-		test -d "${root%/}/var/lib/pacman/local/$dir" ||
-		die "$1: not installed?"
+		test -d "${root%/}/var/lib/pacman/local/$dir" || {
+			test -n "$2" ||
+			die "$1: not installed?"
+			return
+		}
 
 		printf '\n# Package: %s\n%s\n' \
 			"$dir" "/var/lib/pacman/local/$dir/" &&
@@ -88,7 +91,7 @@ summarize_commit () {
 		git show "$1" --format=%H \
 			-M15 --raw -- var/lib/pacman/local/\*/desc
 	fi |
-	sed -ne '/.* M\tvar\/lib\/pacman\/local\/git-extra-[1-9].*\/desc$/d' \
+	sed -ne '/.* M\tvar\/lib\/pacman\/local\/\(mingw-w64-.*-\)\?git-extra-[1-9].*\/desc$/d' \
 	 -e '/ R[0-9]*\t/{s/-\([0-9]\)/ (\1/;h;s|-\([0-9][^/]*\)/desc$|\t\1)|;s|.*\t| -> |;x;s|/desc\t.*||;s|.*\t[^\t]*/||;G;s|\n||g;p}' \
 	 -e '/ A\t/{s|.*local/\([^/]*\)/desc|\1|;s|-\([0-9].*\)| (new: \1)|p}' \
 	 -e '/ D\t/{s|.*local/\([^/]*\)/desc|\1|;s|-\([0-9].*\)| (removed)|p}'
@@ -142,7 +145,14 @@ add|remove)
 	 fi &&
 	 packages="$(for package; do
 		case "$package" in
-		mingw-w64-*) echo mingw-w64-$(uname -m)${package#mingw-w64};;
+		mingw-w64-i686-*|mingw-w64-x86_64-*) echo "$package";;
+		mingw-w64-*)
+			(
+				cd /var/lib/pacman/local &&
+				ls -d mingw-w64-*-"${package#mingw-w64-}"-[0-9]* |
+				sed 's|-[0-9].*||'
+			)
+			;;
 		*) echo "$package";;
 		esac; done)" &&
 	 pacman $pacman_option --noconfirm $packages &&
@@ -168,6 +178,7 @@ commit)
 	 if git diff-index --exit-code --cached HEAD -- \
 		':(exclude)var/lib/pacman/sync/' \
 		':(exclude)var/lib/pacman/local/git-extra-*/desc' \
+		':(exclude)var/lib/pacman/local/mingw-w64-*-git-extra-*/desc' \
 		':(exclude)etc/rebase.db*'
 	 then
 		# No changes, really, but maybe a new Pacman db
@@ -188,12 +199,18 @@ commit)
 ignore)
 	shift
 
+	remove_uninstalled=
 	case "$*" in
 	-a|--all)
-		set -- $(git -C "${root%/}"/ ls-files --exclude-standard  \
+		set -- $( (
+			git -C "${root%/}"/ ls-files --exclude-standard  \
 				--other var/lib/pacman/local/ |
-			sed -n 's|^var/lib/pacman/local/\([^/]*\)-r\?[0-9][-0-9a-z_.]*-[1-9][0-9]*/.*|\1|p' |
-			uniq)
+			sed -n 's|^var/lib/pacman/local/\([^/]*\)-r\?[0-9][-0-9a-z_.~]*-[1-9][0-9]*/.*|\1|p';
+			sed -n 's|^# Package: \(.*\)-r\?[0-9][-0-9a-z_.]*-[1-9][0-9]*|\1|p' \
+				<"${root%/}/.git/info/exclude"
+			) | sort | uniq
+		)
+		remove_uninstalled=t
 		;;
 	esac
 
@@ -207,7 +224,7 @@ ignore)
 		sed -i '/^$/{
 			:1
 			N
-			/^\n# \(Package: \)\?'$pkg'\(-[0-9][-0-9a-z_.]*\)\?$/{
+			/^\n# \(Package: \)\?'$pkg'\(-[0-9][^-]*-[0-9][0-9]*\)\?$/{
 				:2
 				N
 				s/.*\n//
@@ -215,7 +232,7 @@ ignore)
 				b1
 			}
 		}' "$root_gitdir"/info/exclude &&
-		generate_package_gitignore "$pkg" \
+		generate_package_gitignore "$pkg" $remove_uninstalled \
 			>>"$root_gitdir"/info/exclude ||
 		die "Could not ignore $pkg"
 	done

@@ -84,7 +84,7 @@ end;
 // Returns the path to the common or user shell folder as specified in "Param".
 function GetShellFolder(Param:string):string;
 begin
-    if IsAdminLoggedOn then begin
+    if IsAdmin then begin
         Param:='{common'+Param+'}';
     end else begin
         Param:='{user'+Param+'}';
@@ -92,7 +92,7 @@ begin
     Result:=ExpandConstant(Param);
 end;
 
-// As IsComponentSelected() is not supported during uninstall, this work-around
+// As WizardIsComponentSelected() is not supported during uninstall, this work-around
 // simply checks the Registry. This is unreliable if the user runs the installer
 // twice, the first time selecting the component, the second deselecting it.
 function IsComponentInstalled(Component:String):Boolean;
@@ -206,12 +206,21 @@ var
     OutPath,ErrPath:String;
     Res:Longint;
 begin
-    OutPath:=ExpandConstant('{tmp}\')+LogKey+'.out';
-    ErrPath:=ExpandConstant('{tmp}\')+LogKey+'.err';
-    if ExecAsOriginalUser(ExpandConstant('{sys}\cmd.exe'),'/D /C "'+Cmd+' >"'+OutPath+'" 2>"'+ErrPath+'""','',SW_HIDE,ewWaitUntilTerminated,Res) and (Res=0) then
-        Result:=True
-    else begin
-        LogError(ErrorMessage+' (output: '+ReadFileAsString(OutPath)+', errors: '+ReadFileAsString(ErrPath)+').');
+    OutPath:=ExpandConstant('{tmp}.')+LogKey+'.out';
+    ErrPath:=ExpandConstant('{tmp}.')+LogKey+'.err';
+    if not ExecAsOriginalUser(ExpandConstant('{sys}\cmd.exe'),'/D /C "'+Cmd+' >"'+OutPath+'" 2>"'+ErrPath+'""','',SW_HIDE,ewWaitUntilTerminated,Res) then begin
+        LogError(ErrorMessage+' (sys error: '+SysErrorMessage(Res)+').');
         Result:=False;
-    end;
+    end else if (Res<>0) then begin
+        if not FileExists(OutPath) then
+            LogError(ErrorMessage+' (output could not be redirected to '+OutPath+')')
+        else if not FileExists(ErrPath) then
+            LogError(ErrorMessage+' (stderr could not be redirected to '+ErrPath+')')
+        else
+            LogError(ErrorMessage+' (output: '+ReadFileAsString(OutPath)+', errors: '+ReadFileAsString(ErrPath)+', exit code: '+IntToStr(Res)+').');
+        Result:=False;
+    end else
+        Result:=True;
+    DeleteFile(OutPath);
+    DeleteFile(ErrPath);
 end;

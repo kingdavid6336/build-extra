@@ -70,7 +70,7 @@ extract_todo_help () {
 	help_starts_at="${help_starts_at%%:*}"
 	case "$help_starts_at" in
 	'') help=;;
-	*[^0-9]*) die "BUG: could not get start of help in $1";;
+	*[!0-9]*) die "BUG: could not get start of help in $1";;
 	*)
 		mv -f "$1" "$1.raw" ||
 		die "Could not rename $1"
@@ -205,7 +205,7 @@ nested-rebase)
 	if test -n "$merging"
 	then
 		cat >>"$todo" <<-EOF
-		exec git merge -s ours -m "\$(cat "\$GIT_DIR/merging-rebase-message")" "$merging"
+		exec git merge -s ours -m "\$(cat "\$(git rev-parse --git-dir)/merging-rebase-message")" "$merging"
 		exec git replace --graft HEAD HEAD^
 		exec exit 123 # force re-reading of replacement objects
 		EOF
@@ -817,7 +817,7 @@ then
 	if test -n "$merging"
 	then
 		cat >>"$replace_todo" <<-EOF
-		exec git merge -s ours -m "\$(cat "\$GIT_DIR/merging-rebase-message")" "$current_tip"
+		exec git merge -s ours -m "\$(cat "\$(git rev-parse --git-dir)/merging-rebase-message")" "$current_tip"
 		exec git replace --graft HEAD HEAD^
 		exec exit 123 # force re-reading of replacement objects
 		EOF

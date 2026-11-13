@@ -22,9 +22,6 @@ do
 	--include-pdbs)
 		include_pdbs=t
 		;;
-	--include-arm64-artifacts=*)
-		arm64_artifacts_directory="${1#*=}"
-		;;
 	-*)
 		die "Unknown option: $1"
 		;;
@@ -40,24 +37,44 @@ die "Usage: $0 [--output=<directory>] <version> [optional components]"
 test -d "$output_directory" ||
 die "Directory inaccessible: '$output_directory'"
 
-ARCH="$(uname -m)"
-case "$ARCH" in
-i686)
+case "$MSYSTEM" in
+MINGW32)
 	BITNESS=32
+	ARCH=i686
+	ARTIFACT_SUFFIX="32-bit"
 	MD_ARG=128M
+	MINGW_PREFIX=mingw-w64-i686-
 	;;
-x86_64)
+MINGW64)
 	BITNESS=64
+	ARCH=mingw64
+	ARTIFACT_SUFFIX="mingw64"
 	MD_ARG=256M
+	MINGW_PREFIX=mingw-w64-x86_64-
+	;;
+UCRT64)
+	BITNESS=64
+	ARCH=x86_64
+	ARTIFACT_SUFFIX="64-bit"
+	MD_ARG=256M
+	MINGW_PREFIX=mingw-w64-ucrt-x86_64-
+	;;
+CLANGARM64)
+	BITNESS=64
+	ARCH=aarch64
+	ARTIFACT_SUFFIX=arm64
+	MD_ARG=256M
+	MINGW_PREFIX=mingw-w64-clang-aarch64-
 	;;
 *)
-	die "Unhandled architecture: $ARCH"
+	die "Unhandled MSYSTEM: $MSYSTEM"
 	;;
 esac
+MSYSTEM_LOWER=${MSYSTEM,,}
 VERSION=$1
 shift
-TARGET="$output_directory"/PortableGit-"$VERSION"-"$BITNESS"-bit.7z.exe
-OPTS7="-m0=lzma -mx=9 -md=$MD_ARG -mfb=273 -ms=256M "
+TARGET="$output_directory"/PortableGit-"$VERSION"-"$ARTIFACT_SUFFIX".7z.exe
+OPTS7="-m0=lzma -mqs -mlc=8 -mx=9 -md=$MD_ARG -mfb=273 -ms=256M "
 TMPPACK=/tmp.7z
 SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
 
@@ -89,8 +106,8 @@ mkdir -p "$SCRIPT_PATH/root/bin" ||
 die "Could not make bin/ directory"
 
 cp /cmd/git.exe "$SCRIPT_PATH/root/bin/git.exe" &&
-cp /mingw$BITNESS/share/git/compat-bash.exe "$SCRIPT_PATH/root/bin/bash.exe" &&
-cp /mingw$BITNESS/share/git/compat-bash.exe "$SCRIPT_PATH/root/bin/sh.exe" ||
+cp /$MSYSTEM_LOWER/share/git/compat-bash.exe "$SCRIPT_PATH/root/bin/bash.exe" &&
+cp /$MSYSTEM_LOWER/share/git/compat-bash.exe "$SCRIPT_PATH/root/bin/sh.exe" ||
 die "Could not install bin/ redirectors"
 
 cp "$SCRIPT_PATH/../post-install.bat" "$SCRIPT_PATH/root/" ||
@@ -102,7 +119,7 @@ etc_gitconfig="${etc_gitconfig#/}" ||
 die "Could not determine the path of the system config"
 
 # Make a list of files to include
-LIST="$(ARCH=$ARCH BITNESS=$BITNESS ETC_GITCONFIG="$etc_gitconfig" \
+LIST="$(ARCH=$ARCH ETC_GITCONFIG="$etc_gitconfig" \
 	PACKAGE_VERSIONS_FILE="$SCRIPT_PATH"/root/etc/package-versions.txt \
 	sh "$SCRIPT_PATH"/../make-file-list.sh "$@" |
 	grep -v "^$etc_gitconfig$")" ||
@@ -111,7 +128,7 @@ die "Could not generate file list"
 mkdir -p "$SCRIPT_PATH/root/${etc_gitconfig%/*}" &&
 cp /"$etc_gitconfig" "$SCRIPT_PATH/root/$etc_gitconfig" &&
 git config -f "$SCRIPT_PATH/root/$etc_gitconfig" \
-	credential.helper manager-core ||
+	credential.helper manager ||
 die "Could not configure Git-Credential-Manager as default"
 test 64 != $BITNESS ||
 git config -f "$SCRIPT_PATH/root/$etc_gitconfig" --unset pack.packSizeLimit
@@ -124,10 +141,16 @@ case "$LIST" in
 	;;
 esac
 
-rm -rf "$SCRIPT_PATH/root/mingw$BITNESS/libexec/git-core" &&
-mkdir -p "$SCRIPT_PATH/root/mingw$BITNESS/libexec/git-core" &&
-ln $(echo "$LIST" | sed -n "s|^mingw$BITNESS/bin/[^/]*\.dll$|/&|p") \
-	"$SCRIPT_PATH/root/mingw$BITNESS/libexec/git-core/" ||
+git_core="$SCRIPT_PATH/root/$MSYSTEM_LOWER/libexec/git-core" &&
+rm -rf "$git_core" &&
+mkdir -p "$git_core" &&
+if test "$(stat -c %D /$MSYSTEM_LOWER/bin)" = "$(stat -c %D "$git_core")"
+then
+	ln_or_cp=ln
+else
+	ln_or_cp=cp
+fi &&
+$ln_or_cp $(echo "$LIST" | sed -n "s|^$MSYSTEM_LOWER/bin/[^/]*\.dll$|/&|p") "$git_core" ||
 die "Could not copy .dll files into libexec/git-core/"
 
 test -z "$include_pdbs" || {
@@ -138,33 +161,26 @@ test -z "$include_pdbs" || {
 die "Could not unpack .pdb files"
 
 TITLE="$BITNESS-bit"
-
-# ARM64 Windows handling
-if test -n "$arm64_artifacts_directory"
-then
-	echo "Including ARM64 artifacts from $arm64_artifacts_directory" &&
-	TARGET="$output_directory"/PortableGit-"$VERSION"-arm64.7z.exe &&
-	TITLE="ARM64" &&
-	rm -rf "$SCRIPT_PATH/root/arm64" &&
-	cp -ar "$arm64_artifacts_directory" "$SCRIPT_PATH/root/arm64" ||
-	die "Could not copy ARM64 artifacts from $arm64_artifacts_directory"
-fi
-
-# 7-Zip will strip absolute paths completely... therefore, we can add another
-# root directory like this:
-
-LIST="$LIST $SCRIPT_PATH/root/*"
+test $ARCH == "aarch64" && TITLE="ARM64"
 
 
 # Make the self-extracting package
 
-type 7za ||
-pacman -Sy --noconfirm p7zip ||
+type 7z ||
+pacman -Sy --noconfirm $MINGW_PREFIX-7zip ||
 die "Could not install 7-Zip"
 
 echo "Creating archive" &&
-(cd / && 7za a $OPTS7 $TMPPACK $LIST) &&
-(cat "$SCRIPT_PATH/../7-Zip/7zSD.sfx" &&
+echo $LIST | tr ' ' '\n' >$TMPPACK.list &&
+# 7-Zip will strip absolute paths completely... therefore, we can add another
+# root directory like this:
+echo "$(cygpath -aw "$SCRIPT_PATH/root")\\*" >>$TMPPACK.list &&
+(cd / && 7z a $OPTS7 $TMPPACK @${TMPPACK#/}.list) &&
+if test -z "$(7z l $TMPPACK etc/package-versions.txt)"
+then
+	die "/etc/package-versions.txt is missing?!?"
+fi &&
+(cat "$SCRIPT_PATH/../7-Zip/7zS.sfx" &&
  echo ';!@Install@!UTF-8!' &&
  echo 'Title="Portable Git for Windows '$TITLE'"' &&
  echo 'BeginPrompt="This archive extracts a complete Git for Windows '$TITLE'"' &&
@@ -181,4 +197,4 @@ echo "Creating archive" &&
  cat "$TMPPACK") > "$TARGET" &&
 echo "Success! You will find the new installer at \"$TARGET\"." &&
 echo "It is a self-extracting .7z archive." &&
-rm $TMPPACK
+rm $TMPPACK $TMPPACK.list

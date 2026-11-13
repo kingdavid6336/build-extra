@@ -41,7 +41,9 @@ die () {
 }
 
 parse_version () {
-	echo "$1" | grep -Px '\d+(\.(0|[1-9]+)){2,3}' ||
+	test 0-test != "$1" || set 0.0.0
+
+	echo "$1" | grep '^\(0\|[1-9][0-9]*\)\(\.\(0\|[1-9][0-9]*\)\)\{2,3\}$' ||
 	die "
 Either the version format was incorrect or no version was specified.
 Try '$0 --help' for more information.
@@ -72,7 +74,7 @@ do
 	-h|--help)
 		usage
 		;;
-	-o=*|--outputDir=*)
+	-o=*|--output=*|--outputDir=*)
 		TARGET="${1#*=}"
 		shift
 		;;
@@ -179,7 +181,7 @@ cat <<EOF
     </Fragment>
 </Wix>
 EOF
-) | sed -e 's/\(<File \(Id=".*" \)\?Source="\)\(.*\(compat-\)\?\(ba\)\?sh\.exe\|.*git.*\.exe\)\([^>]\)* \/>/\1\3" BindPath="[BindImagePaths]\6 \/>/' \
+) | sed -e 's/\(<File \(Id=".*" \)\?Source="\)\(.*\(compat-\)\?\(ba\)\?sh\.exe\|.*git.*\.exe\)\("[^>]\)* \/>/\1\3" BindPath="[BindImagePaths]\6 \/>/' \
 	-e 's/\(<File \)\(DoNotBind\) \([^>]*\)>/\1\3>/' >GitComponents.wxs
 
 # Make the .msi file

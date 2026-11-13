@@ -61,8 +61,7 @@ die () {
 render_release_notes () {
 	(homepage=https://gitforwindows.org/ &&
 		contribute=$homepage#contribute &&
-		wiki=https://github.com/git-for-windows/git/wiki &&
-		faq=$wiki/FAQ &&
+		faq=https://gitforwindows.org/faq &&
 		mailinglist=mailto:git@vger.kernel.org &&
 		cat <<-EOF &&
 		<!DOCTYPE html>
@@ -213,9 +212,9 @@ pacman -Sy --noconfirm markdown ||
 pacman -S --noconfirm markdown ||
 die "Could not install markdown"
 
-test -f "$OUTPUTDIR${OUTPUTDIR:+/}Release.html" &&
-test "$OUTPUTDIR${OUTPUTDIR:+/}Release.html" -nt "$SCRIPT_PATH"/ReleaseNotes.md &&
-test "$OUTPUTDIR${OUTPUTDIR:+/}Release.html" -nt "$SCRIPT_PATH"/render-release-notes.sh || {
+test -f "$OUTPUTDIR${OUTPUTDIR:+/}ReleaseNotes.html" &&
+test "$OUTPUTDIR${OUTPUTDIR:+/}ReleaseNotes.html" -nt "$SCRIPT_PATH"/ReleaseNotes.md &&
+test "$OUTPUTDIR${OUTPUTDIR:+/}ReleaseNotes.html" -nt "$SCRIPT_PATH"/render-release-notes.sh || {
 	render_release_notes || die "Could not render $OUTPUTDIR${OUTPUTDIR:+/}ReleaseNotes.html"
 	test -z "$COPYCSS" || {
 		test -z "$CSSDIR" && CSSDIR="$OUTPUTDIR" || CSSDIR="$OUTPUTDIR${OUTPUTDIR:+/}$CSSDIR"

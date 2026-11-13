@@ -69,6 +69,17 @@ do
 		inno_defines="$inno_defines$LF#define OUTPUT_TO_TEMP ''"
 		inno_defines="$inno_defines$LF#define DO_NOT_INSTALL 1"
 		;;
+	--include-self-check)
+		inno_defines="$inno_defines$LF#define INCLUDE_SELF_CHECK 1"
+		;;
+	--self-check)
+		test_installer=t
+		skip_files=t
+		inno_defines="$inno_defines$LF#define OUTPUT_TO_TEMP ''"
+		inno_defines="$inno_defines$LF#define DO_NOT_INSTALL 1"
+		inno_defines="$inno_defines$LF#define INCLUDE_SELF_CHECK 1"
+		inno_defines="$inno_defines$LF#define EXIT_AFTER_SELF_CHECK 1"
+		;;
 	--output=*)
 		output_directory="$(cygpath -m "${1#*=}")" ||
 		die "Directory inaccessible: '${1#*=}'"
@@ -77,13 +88,6 @@ do
 		;;
 	--include-pdbs)
 		include_pdbs=t
-		;;
-	--include-arm64-artifacts=*)
-		case "${1#*=}" in
-		/*) ;; # absolute path, okay
-		*) die "Need an absolute path: $1";;
-		esac
-		arm64_artifacts_directory="${1#*=}"
 		;;
 	*)
 		break
@@ -111,25 +115,43 @@ case "$displayver" in
 esac
 
 # Evaluate architecture
-ARCH="$(uname -m)"
-
-case "$ARCH" in
-i686)
-	BITNESS=32
+case "$MSYSTEM" in
+MINGW32)
+	die "The 32-bit installer was retired, see https://gitforwindows.org/32-bit.html"
 	;;
-x86_64)
-	BITNESS=64
+MINGW64)
+	ARCH=mingw64
+	MINGW_PACKAGE_PREFIX=mingw-w64-x86_64
+	inno_defines="$inno_defines$LF#define INSTALLER_FILENAME_SUFFIX 'mingw64'"
+	;;
+UCRT64)
+	ARCH=x86_64
+	MINGW_PACKAGE_PREFIX=mingw-w64-ucrt-x86_64
+	inno_defines="$inno_defines$LF#define INSTALLER_FILENAME_SUFFIX '64-bit'"
+	;;
+CLANGARM64)
+	ARCH=aarch64
+	MINGW_PACKAGE_PREFIX=mingw-w64-clang-aarch64
+	inno_defines="$inno_defines$LF#define INSTALLER_FILENAME_SUFFIX 'arm64'$LF#define ARCHS_ALLOWED 'arm64 and x64compatible'"
 	;;
 *)
-	die "Unhandled architecture: $ARCH"
+	die "Unhandled MSYSTEM: $MSYSTEM"
 	;;
 esac
+MSYSTEM_LOWER=${MSYSTEM,,}
 
-echo "Generating release notes to be included in the installer ..."
-../render-release-notes.sh --css usr/share/git/ ||
+if test -n "$page_id"
+then
+	echo "Space intentionally left empty" >ReleaseNotes.html
+else
+	echo "Generating release notes to be included in the installer ..."
+	../render-release-notes.sh --css usr/share/git/
+fi ||
 die "Could not generate release notes"
 
-if grep -q edit-git-bash /var/lib/pacman/local/mingw-w64-$ARCH-git-[1-9]*/files
+test ! -d /var/lib/pacman/local/ ||
+if grep -q edit-git-bash /var/lib/pacman/local/$MINGW_PACKAGE_PREFIX-git-for-windows-addons-[1-9]*/files ||
+	grep -q edit-git-bash /var/lib/pacman/local/$MINGW_PACKAGE_PREFIX-git-[1-9]*/files
 then
 	INCLUDE_EDIT_GIT_BASH=
 else
@@ -152,7 +174,7 @@ then
 	LIST=
 else
 	echo "Generating file list to be included in the installer ..."
-	LIST="$(ARCH=$ARCH BITNESS=$BITNESS \
+	LIST="$(ARCH=$ARCH \
 		ETC_GITCONFIG="$etc_gitconfig" \
 		PACKAGE_VERSIONS_FILE=package-versions.txt \
 		INCLUDE_GIT_UPDATE=1 \
@@ -168,12 +190,12 @@ test -z "$cmd_git" || {
 die "Could not execute 'git version'"
 
 printf '; List of files\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-	"Source: \"mingw$BITNESS\\bin\\blocked-file-util.exe\"; Flags: dontcopy" \
+	"Source: \"$MSYSTEM_LOWER\\bin\\blocked-file-util.exe\"; Flags: dontcopy" \
 	"Source: \"{#SourcePath}\\package-versions.txt\"; DestDir: {app}\\etc; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
 	"Source: \"{#SourcePath}\\..\\ReleaseNotes.css\"; DestDir: {app}\\usr\\share\\git; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
 	"Source: \"cmd\\git.exe\"; DestDir: {app}\\bin; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
-	"Source: \"mingw$BITNESS\\share\\git\\compat-bash.exe\"; DestName: bash.exe; DestDir: {app}\\bin; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
-	"Source: \"mingw$BITNESS\\share\\git\\compat-bash.exe\"; DestName: sh.exe; DestDir: {app}\\bin; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
+	"Source: \"$MSYSTEM_LOWER\\share\\git\\compat-bash.exe\"; DestName: bash.exe; DestDir: {app}\\bin; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
+	"Source: \"$MSYSTEM_LOWER\\share\\git\\compat-bash.exe\"; DestName: sh.exe; DestDir: {app}\\bin; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore" \
 	"Source: \"{#SourcePath}\\..\\post-install.bat\"; DestName: post-install.bat; DestDir: {app}; Flags: replacesameversion restartreplace" \
 >file-list.iss ||
 die "Could not write to file-list.iss"
@@ -210,7 +232,8 @@ then
 	inno_defines="$inno_defines$LF#define WITH_EXPERIMENTAL_BUILTIN_ADD_I 1"
 fi
 
-if grep -q enable_pcon /usr/bin/msys-2.0.dll
+if grep -q enable_pcon /usr/bin/msys-2.0.dll &&
+	case "$(uname -r)" in 3.[0-4]*) true;; *) false;; esac # pcon in v3.5+ is no longer experimental
 then
 	inno_defines="$inno_defines$LF#define WITH_EXPERIMENTAL_PCON 1"
 fi
@@ -234,13 +257,12 @@ test -z "$GITCONFIG_PATH" || {
 	for key in $keys
 	do
 		case "$key" in
-		pack.packsizelimit|diff.astextplain.*|filter.lfs.*|http.sslcainfo)
+		diff.astextplain.*|filter.lfs.*|http.sslcainfo)
 			# set in the system-wide config
 			value="$(git config -f "/$GITCONFIG_PATH" "$key")" &&
 			case "$key$value" in *"'"*) die "Cannot handle $key=$value because of the single quote";; esac &&
 			case "$key" in
-			filter.lfs.*) extra=" IsComponentSelected('gitlfs') And";;
-			pack.packsizelimit) test $BITNESS = 32 || continue; value=2g; extra=;;
+			filter.lfs.*) extra=" WizardIsComponentSelected('gitlfs') And";;
 			*) extra=;;
 			esac &&
 			gitconfig="$gitconfig$LF    if$extra not GitSystemConfigSet('$key','$value') then$LF        Result:=False;" ||
@@ -258,21 +280,31 @@ test -z "$GITCONFIG_PATH" || {
 
 if test -n "$cmd_git"
 then
-	if test ! -f init.defaultBranch ||
-		test "$git_version" != "$(cat init.defaultBranch.gitVersion 2>/dev/null)"
+	# Find out Git's default branch name
+	case "${git_version#git version }" in
+	[01].*|2.[0-9].*|2.[12][0-9].*|2.3[0-4].*) false;; # does not support `git var GIT_DEFAULT_BRANCH`
+	*) default_branch_name="$(GIT_CONFIG_NOSYSTEM=1 \
+		HOME=.git/x XDG_CONFIG_HOME=.git/x GIT_DIR=.git/x \
+		git var GIT_DEFAULT_BRANCH)";;
+	esac ||
+	if test -f init.defaultBranch &&
+		test "$git_version" = "$(cat init.defaultBranch.gitVersion 2>/dev/null)"
 	then
+		default_branch_name="$(cat init.defaultBranch)"
+	else
 		echo "$git_version" >init.defaultBranch.gitVersion &&
 		d=init.defaultBranch.$$ &&
 		rm -f $d &&
 		GIT_CONFIG_NOSYSTEM=true HOME=$d XDG_CONFIG_HOME=$d GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME= git init --bare $d &&
-		default_branch_name="$(git -C $d symbolic-ref --short HEAD)" &&
+		git config -f $d/.gitconfig --add safe.directory "$(cygpath -am $d)" &&
+		default_branch_name="$(HOME=$d git -C $d symbolic-ref --short HEAD)" &&
 		rm -rf $d &&
 		test -n "$default_branch_name" &&
 		echo "$default_branch_name" >init.defaultBranch ||
 		die "Could not determine default branch name"
 	fi
 
-	inno_defines="$inno_defines$LF#define DEFAULT_BRANCH_NAME '$(cat init.defaultBranch)'"
+	inno_defines="$inno_defines$LF#define DEFAULT_BRANCH_NAME '$default_branch_name'"
 fi
 
 # 1. Collect all SSH related files from $LIST and pacman, sort each and then return the overlap
@@ -280,11 +312,15 @@ fi
 # 3. Construct DeleteOpenSSHFiles function signature to be used in install.iss
 # 4. Assemble function body and compile flag to be used as guard in install.iss
 echo "$LIST" | sort >sorted-file-list.txt
-pacman -Ql openssh | sed -n 's|^openssh /\(.*[^/]\)$|\1|p' | sort >sorted-openssh-file-list.txt
-openssh_deletes="$(comm -12 sorted-file-list.txt sorted-openssh-file-list.txt |
-	sed -e 'y/\//\\/' -e "s|.*|    if not DeleteFile(AppDir+'\\\\&') then\n        Result:=False;|")"
-inno_defines="$inno_defines$LF[Code]${LF}function DeleteOpenSSHFiles():Boolean;${LF}var$LF    AppDir:String;${LF}begin$LF    AppDir:=ExpandConstant('{app}');$LF    Result:=True;"
-inno_defines="$inno_defines$LF$openssh_deletes${LF}end;$LF#define DELETE_OPENSSH_FILES 1"
+if type -p pacman.exe >/dev/null 2>&1
+then
+	pacman -Ql openssh 2>pacman.stderr | sed -n 's|^openssh /\(.*[^/]\)$|\1|p' | sort >sorted-openssh-file-list.txt
+	grep -v 'database file for .* does not exist' <pacman.stderr >&2
+	openssh_deletes="$(comm -12 sorted-file-list.txt sorted-openssh-file-list.txt |
+		sed -e 'y/\//\\/' -e "s|.*|    if not DeleteFile(AppDir+'\\\\&') then\n        Result:=False;|")"
+	inno_defines="$inno_defines$LF[Code]${LF}function DeleteOpenSSHFiles():Boolean;${LF}var$LF    AppDir:String;${LF}begin$LF    AppDir:=ExpandConstant('{app}');$LF    Result:=True;"
+	inno_defines="$inno_defines$LF$openssh_deletes${LF}end;$LF#define DELETE_OPENSSH_FILES 1"
+fi
 
 test -z "$LIST" ||
 echo "$LIST" |
@@ -305,22 +341,11 @@ test -z "$include_pdbs" || {
 } ||
 die "Could not include .pdb files"
 
-test -z "$arm64_artifacts_directory" || {
-	echo "Including ARM64 artifacts from $arm64_artifacts_directory" &&
-	inno_defines="$inno_defines$LF#define INSTALLER_FILENAME_SUFFIX 'arm64'" &&
-	mixed="$(cygpath -m "$arm64_artifacts_directory")" &&
-	find "$arm64_artifacts_directory" -type f |
-	sed -e "s|^$arm64_artifacts_directory\\(/.*\)\?/\([^/]*\)$|Source: \"$mixed\\1/\\2\"; DestDir: {app}/arm64\\1; Flags: replacesameversion restartreplace; AfterInstall: DeleteFromVirtualStore|" \
-		-e 's|/|\\|g' \
-		>> file-list.iss
-} ||
-die "Could not include ARM64 artifacts"
-
 etc_gitconfig_dir="${etc_gitconfig%/gitconfig}"
 printf "%s\n%s\n%s\n%s\n%s%s" \
 	"#define APP_VERSION '$displayver'" \
 	"#define FILENAME_VERSION '$version'" \
-	"#define BITNESS '$BITNESS'" \
+	"#define MINGW_BITNESS '$MSYSTEM_LOWER'" \
 	"#define SOURCE_DIR '$(cygpath -aw /)'" \
 	"#define ETC_GITCONFIG_DIR '${etc_gitconfig_dir//\//\\}'" \
 	"$inno_defines" \

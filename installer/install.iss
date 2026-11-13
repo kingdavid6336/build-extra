@@ -4,8 +4,8 @@
 
 #include "config.iss"
 
-#if !defined(APP_VERSION) || !defined(BITNESS)
-#error "config.iss should define APP_VERSION and BITNESS"
+#if !defined(APP_VERSION) || !defined(MINGW_BITNESS)
+#error "config.iss should define APP_VERSION and MINGW_BITNESS"
 #endif
 
 #define APP_NAME      'Git'
@@ -13,8 +13,7 @@
 #undef APP_VERSION
 #define APP_VERSION   'Snapshot'
 #endif
-#define MINGW_BITNESS 'mingw'+BITNESS
-#define APP_CONTACT_URL 'https://github.com/git-for-windows/git/wiki/Contact'
+#define APP_CONTACT_URL 'https://gitforwindows.org/contact'
 #define APP_URL       'https://gitforwindows.org/'
 #define APP_BUILTINS  'share\git\builtins.txt'
 
@@ -26,23 +25,14 @@
 #define DEFAULT_BRANCH_NAME 'master'
 #endif
 
-#ifndef INSTALLER_FILENAME_SUFFIX
-#define INSTALLER_FILENAME_SUFFIX ''
-#endif
-
 [Setup]
 ; Compiler-related
 Compression=lzma2/ultra64
-LZMAUseSeparateProcess=yes
 #ifdef OUTPUT_TO_TEMP
 OutputBaseFilename={#FILENAME_VERSION}
 OutputDir={#GetEnv('TEMP')}
 #else
-#if INSTALLER_FILENAME_SUFFIX!=''
 OutputBaseFilename={#APP_NAME+'-'+FILENAME_VERSION+'-'+INSTALLER_FILENAME_SUFFIX}
-#else
-OutputBaseFilename={#APP_NAME+'-'+FILENAME_VERSION}-{#BITNESS}-bit
-#endif
 #ifdef OUTPUT_DIRECTORY
 OutputDir={#OUTPUT_DIRECTORY}
 #else
@@ -54,14 +44,13 @@ SolidCompression=yes
 #define SOURCE_DIR SourcePath+'\..\..\..\..'
 #endif
 SourceDir={#SOURCE_DIR}
-#if BITNESS=='64' || INSTALLER_FILENAME_SUFFIX=='arm64'
-ArchitecturesInstallIn64BitMode=x64 arm64
-#endif
+; Inno Setup 7 builds 32-bit installers unless told otherwise.
+SetupArchitecture=x64
 #ifdef SIGNTOOL
 SignTool=signtool
 #endif
 
-#define FILE_VERSION GetFileVersion(SOURCE_DIR+'\'+MINGW_BITNESS+'\bin\git.exe')
+#define FILE_VERSION GetVersionNumbersString(SOURCE_DIR+'\'+MINGW_BITNESS+'\bin\git.exe')
 
 ; Installer-related
 AllowNoIcons=yes
@@ -73,7 +62,7 @@ AppVersion={#APP_VERSION}
 ChangesAssociations=yes
 ChangesEnvironment=yes
 CloseApplications=no
-DefaultDirName={pf}\{#APP_NAME}
+DefaultDirName={commonpf}\{#APP_NAME}
 DisableDirPage=auto
 DefaultGroupName={#APP_NAME}
 DisableProgramGroupPage=auto
@@ -89,14 +78,17 @@ UninstallDisplayIcon={app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
 #ifndef COMPILE_FROM_IDE
 VersionInfoVersion={#FILE_VERSION}
 #endif
+#ifdef ARCHS_ALLOWED
+ArchitecturesAllowed={#ARCHS_ALLOWED}
+#endif
 
 ; Cosmetic
 SetupIconFile={#SourcePath}\..\git.ico
 WizardImageBackColor=clWhite
-WizardImageStretch=no
+WizardImageStretch=true
 WizardImageFile={#SourcePath}\git.bmp
 WizardSmallImageFile={#SourcePath}\gitsmall.bmp
-MinVersion=6.0
+MinVersion=6.3
 
 [Types]
 ; Define a custom type to avoid getting the three default types.
@@ -104,19 +96,19 @@ Name: default; Description: Default installation; Flags: iscustom
 
 [Components]
 Name: icons; Description: Additional icons
-Name: icons\quicklaunch; Description: In the Quick Launch; Check: not IsAdminLoggedOn
+Name: icons\quicklaunch; Description: In the Quick Launch; Check: not IsAdmin
 Name: icons\desktop; Description: On the Desktop
 Name: ext; Description: Windows Explorer integration; Types: default
-Name: ext\shellhere; Description: Git Bash Here; Types: default
-Name: ext\guihere; Description: Git GUI Here; Types: default
+Name: ext\shellhere; Description: Open Git Bash here; Types: default
+Name: ext\guihere; Description: Open Git GUI here; Types: default
 Name: gitlfs; Description: Git LFS (Large File Support); Types: default; Flags: disablenouninstallwarning
 Name: assoc; Description: Associate .git* configuration files with the default text editor; Types: default
 Name: assoc_sh; Description: Associate .sh files to be run with Bash; Types: default
 Name: consolefont; Description: Use a TrueType font in all console windows; OnlyBelowVersion: 10.0
 Name: autoupdate; Description: Check daily for Git for Windows updates
-Name: windowsterminal; Description: "(NEW!) Add a Git Bash Profile to Windows Terminal"; MinVersion: 10.0.18362
+Name: windowsterminal; Description: "Add a Git Bash Profile to Windows Terminal"; MinVersion: 10.0.18362
 #ifdef WITH_SCALAR
-Name: scalar; Description: "(NEW!) Scalar (Git add-on to manage large-scale repositories)"; Types: default
+Name: scalar; Description: "Scalar (Git add-on to manage large-scale repositories)"; Types: default
 #endif
 
 
@@ -133,21 +125,22 @@ Source: {#SourcePath}\NOTICE.txt; DestDir: {app}; Flags: replacesameversion; Aft
 #ifdef INCLUDE_EDIT_GIT_BASH
 Source: {#SourcePath}\..\edit-git-bash.exe; Flags: dontcopy
 #endif
+Source: "{#SourcePath}\..\aslr-manager.ps1"; DestName: aslr-manager.ps1; DestDir: {app}\cmd; Flags: replacesameversion restartreplace
 
 [Dirs]
 Name: "{app}\dev"
 Name: "{app}\dev\mqueue"
 Name: "{app}\dev\shm"
 Name: "{app}\tmp"
-Name: "{commonappdata}\Microsoft\Windows Terminal\Fragments\Git"; Components: windowsterminal; Check: IsAdminLoggedOn
-Name: "{localappdata}\Microsoft\Windows Terminal\Fragments\Git"; Components: windowsterminal; Check: not IsAdminLoggedOn
+Name: "{commonappdata}\Microsoft\Windows Terminal\Fragments\Git"; Components: windowsterminal; Check: IsAdmin
+Name: "{localappdata}\Microsoft\Windows Terminal\Fragments\Git"; Components: windowsterminal; Check: not IsAdmin
 
 [Icons]
 Name: {group}\Git GUI; Filename: {app}\cmd\git-gui.exe; Parameters: ""; WorkingDir: %HOMEDRIVE%%HOMEPATH%; IconFilename: {app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
 Name: {group}\Git Bash; Filename: {app}\git-bash.exe; Parameters: "--cd-to-home"; WorkingDir: %HOMEDRIVE%%HOMEPATH%; IconFilename: {app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
 Name: {group}\Git CMD; Filename: {app}\git-cmd.exe; Parameters: "--cd-to-home"; WorkingDir: %HOMEDRIVE%%HOMEPATH%; IconFilename: {app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
 Name: {group}\Git Release Notes; Filename: {app}\ReleaseNotes.html; Parameters: ""; WorkingDir: %HOMEDRIVE%%HOMEPATH%; IconFilename: {app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
-Name: {group}\Git FAQs (Frequently Asked Questions); Filename: https://github.com/git-for-windows/git/wiki/FAQ; IconFilename: {app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
+Name: {group}\Git FAQs (Frequently Asked Questions); Filename: https://gitforwindows.org/faq; IconFilename: {app}\{#MINGW_BITNESS}\share\git\git-for-windows.ico
 
 [Messages]
 BeveledLabel={#APP_URL}
@@ -161,12 +154,12 @@ SetupWindowTitle={#APP_NAME} {#APP_VERSION} Setup
 
 [Registry]
 ; Aides installing third-party (credential, remote, etc) helpers
-Root: HKLM; Subkey: Software\GitForWindows; ValueType: string; ValueName: CurrentVersion; ValueData: {#APP_VERSION}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn
-Root: HKLM; Subkey: Software\GitForWindows; ValueType: string; ValueName: InstallPath; ValueData: {app}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn
-Root: HKLM; Subkey: Software\GitForWindows; ValueType: string; ValueName: LibexecPath; ValueData: {app}\{#MINGW_BITNESS}\libexec\git-core; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn
-Root: HKCU; Subkey: Software\GitForWindows; ValueType: string; ValueName: CurrentVersion; ValueData: {#APP_VERSION}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn
-Root: HKCU; Subkey: Software\GitForWindows; ValueType: string; ValueName: InstallPath; ValueData: {app}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn
-Root: HKCU; Subkey: Software\GitForWindows; ValueType: string; ValueName: LibexecPath; ValueData: {app}\{#MINGW_BITNESS}\libexec\git-core; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn
+Root: HKLM; Subkey: Software\GitForWindows; ValueType: string; ValueName: CurrentVersion; ValueData: {#APP_VERSION}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin
+Root: HKLM; Subkey: Software\GitForWindows; ValueType: string; ValueName: InstallPath; ValueData: {app}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin
+Root: HKLM; Subkey: Software\GitForWindows; ValueType: string; ValueName: LibexecPath; ValueData: {app}\{#MINGW_BITNESS}\libexec\git-core; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin
+Root: HKCU; Subkey: Software\GitForWindows; ValueType: string; ValueName: CurrentVersion; ValueData: {#APP_VERSION}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin
+Root: HKCU; Subkey: Software\GitForWindows; ValueType: string; ValueName: InstallPath; ValueData: {app}; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin
+Root: HKCU; Subkey: Software\GitForWindows; ValueType: string; ValueName: LibexecPath; ValueData: {app}\{#MINGW_BITNESS}\libexec\git-core; Flags: uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin
 
 ; There is no "Console" key in HKLM.
 Root: HKCU; Subkey: Console; ValueType: string; ValueName: FaceName; ValueData: Lucida Console; Flags: uninsclearvalue; Components: consolefont
@@ -188,44 +181,44 @@ Root: HKCU; Subkey: Console\Git CMD; ValueType: dword; ValueName: FontWeight; Va
 ; is a member of the local Administrators group or not (see the "Check" argument).
 
 ; File associations for configuration files that may be contained in a repository (so this does not include ".gitconfig").
-Root: HKLM; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKLM; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKLM; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitattributes; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
 
-Root: HKLM; Subkey: Software\Classes\.gitignore; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKLM; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKLM; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitignore; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitignore; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitignore; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitignore; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
 
-Root: HKLM; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKLM; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKLM; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
-Root: HKCU; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdminLoggedOn; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKLM; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueData: txtfile; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: Content Type; ValueData: text/plain; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
+Root: HKCU; Subkey: Software\Classes\.gitmodules; ValueType: string; ValueName: PerceivedType; ValueData: text; Flags: createvalueifdoesntexist uninsdeletevalue uninsdeletekeyifempty; Check: not IsAdmin; Components: assoc
 
 ; Associate .sh extension with sh.exe so those files are double-clickable,
 ; startable from cmd.exe, and when files are dropped on them they are passed
 ; as arguments to the script.
 
 ; Install under HKEY_LOCAL_MACHINE if an administrator is installing.
-Root: HKLM; Subkey: Software\Classes\.sh; ValueType: string; ValueData: sh_auto_file; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: IsAdminLoggedOn; Components: assoc_sh
-Root: HKLM; Subkey: Software\Classes\sh_auto_file; ValueType: string; ValueData: "Shell Script"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: IsAdminLoggedOn; Components: assoc_sh
-Root: HKLM; Subkey: Software\Classes\sh_auto_file\shell\open\command; ValueType: string; ValueData: """{app}\git-bash.exe"" --no-cd ""%L"" %*"; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: IsAdminLoggedOn; Components: assoc_sh
-Root: HKLM; Subkey: Software\Classes\sh_auto_file\DefaultIcon; ValueType: string; ValueData: "%SystemRoot%\System32\shell32.dll,-153"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: IsAdminLoggedOn; Components: assoc_sh
-Root: HKLM; Subkey: Software\Classes\sh_auto_file\ShellEx\DropHandler; ValueType: string; ValueData: {#DROP_HANDLER_GUID}; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: IsAdminLoggedOn; Components: assoc_sh
+Root: HKLM; Subkey: Software\Classes\.sh; ValueType: string; ValueData: sh_auto_file; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: IsAdmin; Components: assoc_sh
+Root: HKLM; Subkey: Software\Classes\sh_auto_file; ValueType: string; ValueData: "Shell Script"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: IsAdmin; Components: assoc_sh
+Root: HKLM; Subkey: Software\Classes\sh_auto_file\shell\open\command; ValueType: string; ValueData: """{app}\git-bash.exe"" --no-cd ""%L"" %*"; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: IsAdmin; Components: assoc_sh
+Root: HKLM; Subkey: Software\Classes\sh_auto_file\DefaultIcon; ValueType: string; ValueData: "%SystemRoot%\System32\shell32.dll,-153"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: IsAdmin; Components: assoc_sh
+Root: HKLM; Subkey: Software\Classes\sh_auto_file\ShellEx\DropHandler; ValueType: string; ValueData: {#DROP_HANDLER_GUID}; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: IsAdmin; Components: assoc_sh
 
 ; Install under HKEY_CURRENT_USER if a non-administrator is installing.
-Root: HKCU; Subkey: Software\Classes\.sh; ValueType: string; ValueData: sh_auto_file; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdminLoggedOn; Components: assoc_sh
-Root: HKCU; Subkey: Software\Classes\sh_auto_file; ValueType: string; ValueData: "Shell Script"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdminLoggedOn; Components: assoc_sh
-Root: HKCU; Subkey: Software\Classes\sh_auto_file\shell\open\command; ValueType: string; ValueData: """{app}\git-bash.exe"" --no-cd ""%L"" %*"; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdminLoggedOn; Components: assoc_sh
-Root: HKCU; Subkey: Software\Classes\sh_auto_file\DefaultIcon; ValueType: string; ValueData: "%SystemRoot%\System32\shell32.dll,-153"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdminLoggedOn; Components: assoc_sh
-Root: HKCU; Subkey: Software\Classes\sh_auto_file\ShellEx\DropHandler; ValueType: string; ValueData: {#DROP_HANDLER_GUID}; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdminLoggedOn; Components: assoc_sh
+Root: HKCU; Subkey: Software\Classes\.sh; ValueType: string; ValueData: sh_auto_file; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdmin; Components: assoc_sh
+Root: HKCU; Subkey: Software\Classes\sh_auto_file; ValueType: string; ValueData: "Shell Script"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdmin; Components: assoc_sh
+Root: HKCU; Subkey: Software\Classes\sh_auto_file\shell\open\command; ValueType: string; ValueData: """{app}\git-bash.exe"" --no-cd ""%L"" %*"; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdmin; Components: assoc_sh
+Root: HKCU; Subkey: Software\Classes\sh_auto_file\DefaultIcon; ValueType: string; ValueData: "%SystemRoot%\System32\shell32.dll,-153"; Flags: createvalueifdoesntexist uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdmin; Components: assoc_sh
+Root: HKCU; Subkey: Software\Classes\sh_auto_file\ShellEx\DropHandler; ValueType: string; ValueData: {#DROP_HANDLER_GUID}; Flags: uninsdeletekeyifempty uninsdeletevalue; Check: not IsAdmin; Components: assoc_sh
 
 [UninstallDelete]
 ; Delete the built-ins.
@@ -235,11 +228,12 @@ Type: files; Name: {app}\{#MINGW_BITNESS}\libexec\git-core\git.exe
 
 ; Delete git-lfs wrapper
 Type: files; Name: {app}\cmd\git-lfs.exe
+Type: dirifempty; Name: {app}\cmd
 
 ; Delete copied *.dll files
 Type: files; Name: {app}\{#MINGW_BITNESS}\libexec\git-core\*.dll
 
-; Delete the dynamical generated MSYS2 files
+; Delete the dynamically-generated MSYS2 files
 Type: files; Name: {app}\etc\hosts
 Type: files; Name: {app}\etc\mtab
 Type: files; Name: {app}\etc\networks
@@ -262,25 +256,17 @@ Type: files; Name: {app}\Git Bash.lnk
 Type: dirifempty; Name: {app}\home\{username}
 Type: dirifempty; Name: {app}\home
 
-#if BITNESS=='32'
-; Delete the files required for rebaseall
-Type: files; Name: {app}\bin\msys-2.0.dll
-Type: files; Name: {app}\bin\rebase.exe
-Type: dirifempty; Name: {app}\bin
-Type: files; Name: {app}\etc\rebase.db.i386
-Type: dirifempty; Name: {app}\etc
-#endif
-
 ; Delete recorded install options
 Type: files; Name: {app}\etc\install-options.txt
-Type: dirifempty; Name: {app}\etc
 Type: dirifempty; Name: {app}\{#MINGW_BITNESS}\libexec\git-core
 Type: dirifempty; Name: {app}\{#MINGW_BITNESS}\libexec
 Type: dirifempty; Name: {app}\{#MINGW_BITNESS}
 Type: dirifempty; Name: {app}
 
-; Delete Git Bash options
+; Delete Git Bash options and the system config
 Type: files; Name: {app}\etc\git-bash.config
+Type: files; Name: {app}\etc\gitconfig
+Type: dirifempty; Name: {app}\etc
 
 ; Delete Windows Terminal profile fragments
 Type: files; Name: {commonappdata}\Microsoft\Windows Terminal\Fragments\Git\git-bash.json
@@ -291,7 +277,6 @@ Type: files; Name: {localappdata}\Microsoft\Windows Terminal\Fragments\Git\git-b
 #include "environment.inc.iss"
 #include "putty.inc.iss"
 #include "modules.inc.iss"
-#include "exec-with-capture.inc.iss"
 
 function ParamIsSet(Key:String):Boolean;
 begin
@@ -337,57 +322,72 @@ end;
 
 const
     // Git Editor options.
-    GE_Nano           = 0;
-    GE_VIM            = 1;
-    GE_NotepadPlusPlus = 2;
-    GE_VisualStudioCode = 3;
+    GE_Nano                     = 0;
+    GE_VIM                      = 1;
+    GE_NotepadPlusPlus          = 2;
+    GE_VisualStudioCode         = 3;
     GE_VisualStudioCodeInsiders = 4;
-    GE_SublimeText = 5;
-    GE_Atom = 6;
-    GE_VSCodium = 7;
-    GE_Notepad = 8;
-    GE_Wordpad = 9;
-    GE_CustomEditor = 10;
+    GE_SublimeText              = 5;
+    GE_Atom                     = 6;
+    GE_VSCodium                 = 7;
+    GE_Notepad                  = 8;
+    GE_Wordpad                  = 9;
+    GE_MicrosoftEdit            = 10;
+    GE_CustomEditor             = 11;
+    GE_MaxEditor                = 11;
 
     // Git Path options.
     GP_BashOnly       = 1;
     GP_Cmd            = 2;
     GP_CmdTools       = 3;
+    GP_MaxPath        = 3;
 
     // Default Branch options.
     DB_Unspecified    = 1;
     DB_Manual         = 2;
+    DB_MaxBranch      = 2;
 
     // Git SSH options.
     GS_OpenSSH         = 1;
     GS_Plink           = 2;
     GS_ExternalOpenSSH = 3;
+    GS_MaxSSH          = 3;
 
     // Git HTTPS (cURL) options.
     GC_OpenSSL        = 1;
     GC_WinSSL         = 2;
+    GC_MaxHTTPS       = 2;
 
     // Git line ending conversion options.
     GC_LFOnly         = 1;
     GC_CRLFAlways     = 2;
     GC_CRLFCommitAsIs = 3;
+    GC_MaxAutoCRLF    = 3;
 
     // Git Bash terminal settings.
     GB_MinTTY         = 1;
     GB_ConHost        = 2;
+    GB_MaxTerminal    = 2;
 
     // `git pull` behavior settings.
     GP_GitPullMerge   = 1;
     GP_GitPullRebase  = 2;
     GP_GitPullFFOnly  = 3;
+    GP_MaxPull        = 3;
 
     // Git Credential Manager settings.
     GCM_None          = 1;
-    GCM_Core          = 2;
+    GCM               = 2;
+    GCM_Max           = 2;
 
     // Extra options
     GP_FSCache        = 1;
     GP_Symlinks       = 2;
+    GP_MaxExtra       = 2;
+
+    // Security options
+    SO_MandatoryASLR = 1;
+    SO_MaxSecurity   = 1;
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_DIFFTOOL
 #define HAVE_EXPERIMENTAL_OPTIONS 1
@@ -421,6 +421,7 @@ const
     GP_BuiltinAddI     = 4;
     GP_EnablePCon      = 5;
     GP_EnableFSMonitor = 6;
+    GP_MaxExperimental = 6;
 #endif
 
 var
@@ -441,8 +442,8 @@ var
     // Wizard page and variables for the Editor options.
     EditorPage:TInputFileWizardPage;
     CbbEditor:TNewComboBox;
-    LblEditor:array[GE_Nano..GE_CustomEditor] of array of TLabel;
-    EditorAvailable:array[GE_Nano..GE_CustomEditor] of Boolean;
+    LblEditor:array[0..GE_MaxEditor] of array of TLabel;
+    EditorAvailable:array[0..GE_MaxEditor] of Boolean;
     SelectedEditor:Integer;
 
     VisualStudioCodeUserInstallation:Boolean;
@@ -456,6 +457,7 @@ var
     SublimeTextPath:String;
     AtomPath:String;
     VSCodiumPath:String;
+    MicrosoftEditPath:String;
     CustomEditorPath:String;
     CustomEditorOptions:String;
 
@@ -466,42 +468,45 @@ var
 
     // Wizard page and variables for the Path options.
     PathPage:TWizardPage;
-    RdbPath:array[GP_BashOnly..GP_CmdTools] of TRadioButton;
+    RdbPath:array[1..GP_MaxPath] of TRadioButton;
 
     // Wizard page and variables for the SSH options.
     SSHChoicePage:TWizardPage;
-    RdbSSH:array[GS_OpenSSH..GS_ExternalOpenSSH] of TRadioButton;
+    RdbSSH:array[1..GS_MaxSSH] of TRadioButton;
     EdtPlink:TEdit;
     TortoisePlink:TCheckBox;
 
     // Wizard page and variables for the HTTPS implementation (cURL) settings.
     CurlVariantPage:TWizardPage;
-    RdbCurlVariant:array[GC_OpenSSL..GC_WinSSL] of TRadioButton;
+    RdbCurlVariant:array[1..GC_MaxHTTPS] of TRadioButton;
 
     // Wizard page and variables for the line ending conversion options.
     CRLFPage:TWizardPage;
-    RdbCRLF:array[GC_LFOnly..GC_CRLFCommitAsIs] of TRadioButton;
+    RdbCRLF:array[1..GC_MaxAutoCRLF] of TRadioButton;
 
     // Wizard page and variables for the terminal emulator settings.
     BashTerminalPage:TWizardPage;
-    RdbBashTerminal:array[GB_MinTTY..GB_ConHost] of TRadioButton;
+    RdbBashTerminal:array[1..GB_MaxTerminal] of TRadioButton;
 
     // Wizard page and variables for the `git pull` options.
     GitPullBehaviorPage:TWizardPage;
-    RdbGitPullBehavior:array[GP_GitPullMerge..GP_GitPullFFOnly] of TRadioButton;
+    RdbGitPullBehavior:array[1..GP_MaxPull] of TRadioButton;
 
     // Wizard page and variables for the credential manager options.
     GitCredentialManagerPage:TWizardPage;
-    RdbGitCredentialManager:array[GCM_None..GCM_Core] of TRadioButton;
+    RdbGitCredentialManager:array[1..GCM_Max] of TRadioButton;
 
     // Wizard page and variables for the extra options.
     ExtraOptionsPage:TWizardPage;
-    RdbExtraOptions:array[GP_FSCache..GP_Symlinks] of TCheckBox;
+    RdbExtraOptions:array[1..GP_MaxExtra] of TCheckBox;
+
+    SecurityOptionsPage:TWizardPage;
+    RdbSecurityOptions:array[1..SO_MaxSecurity] of TCheckBox;
 
 #ifdef HAVE_EXPERIMENTAL_OPTIONS
     // Wizard page and variables for the experimental options.
     ExperimentalOptionsPage:TWizardPage;
-    RdbExperimentalOptions:array[GP_BuiltinDifftool..GP_EnableFSMonitor] of TCheckBox;
+    RdbExperimentalOptions:array[1..GP_MaxExperimental] of TCheckBox;
 #endif
 
     // Mapping controls to hyperlinks
@@ -555,17 +560,19 @@ var
     Keys:TArrayOfString;
 begin
 
-    if IsAdminLoggedOn then begin
+    if IsAdmin then begin
         RootKey:=HKEY_LOCAL_MACHINE;
     end else begin
         RootKey:=HKEY_CURRENT_USER;
     end;
 
-    SetArrayLength(Keys,4);
+    SetArrayLength(Keys,6);
     Keys[0]:='SOFTWARE\Classes\Directory\shell\git_shell';
     Keys[1]:='SOFTWARE\Classes\Directory\Background\shell\git_shell';
     Keys[2]:='SOFTWARE\Classes\Directory\shell\git_gui';
     Keys[3]:='SOFTWARE\Classes\Directory\Background\shell\git_gui';
+    Keys[4]:='SOFTWARE\Classes\LibraryFolder\background\shell\git_shell';
+    Keys[5]:='SOFTWARE\Classes\LibraryFolder\background\shell\git_gui';
 
     for i:=0 to Length(Keys)-1 do begin
         Command:='';
@@ -585,9 +592,10 @@ var
 function ShutdownFSMonitorDaemons():Boolean;
 var
     FindRec:TFindRec;
-    ExitCode:DWORD;
-    Path,Str:String;
+    ExitCode:Integer;
+    Path,StdOut:String;
     Len,i:Integer;
+    Output:TExecOutput;
 begin
     Result:=False;
 #ifdef WITH_EXPERIMENTAL_BUILTIN_FSMONITOR
@@ -607,22 +615,22 @@ begin
             // Find out which form to use.
             if (BuiltinFSMonitorStopOption='') then begin
                 BuiltinFSMonitorStopOption:='(huh?)';
-                if not ExecWithCapture('"'+AppDir+'\cmd\git.exe" fsmonitor--daemon -h',Str,Str,ExitCode) or (ExitCode<>129) then begin
-                    if (i<>1) and (i<>127) then // Suppress message if `git.exe` was not found, or if it does not know about the built-in FSMonitor
-                        LogError('Could not get FSMonitor help (exit code '+IntToStr(ExitCode)+'):'+#13+Str);
+                if not ExecAndCaptureOutput(AppDir+'\cmd\git.exe', 'fsmonitor--daemon -h', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, Output) or ((ExitCode<>129) and (ExitCode<>0)) then begin
+                    if (ExitCode<>1) and (ExitCode<>127) then // Suppress message if `git.exe` was not found, or if it does not know about the built-in FSMonitor
+                        LogError('Could not get FSMonitor help (exit code '+IntToStr(ExitCode)+'):'+#13+StringJoin(#13,Output.StdOut)+#13+StringJoin(#13,Output.StdErr));
                     Exit;
                 end else begin
-                    i:=Pos('stop'+#10,Str);
+                    StdOut:=StringJoin(#10, Output.StdOut);
+                    i:=Pos('stop'+#10,StdOut);
                     if (i=0) then begin
-                        LogError('Could not determine stop option from:'+#13+Str);
+                        LogError('Could not determine stop option from:'+#13+StdOut);
                         Exit;
                     end;
-                    if (i>2) and (Str[i-1]='-') and (Str[i-2]='-') then
+                    if (i>2) and (StdOut[i-1]='-') and (StdOut[i-2]='-') then
                         BuiltinFSMonitorStopOption:='--stop'
                     else
                         BuiltinFSMonitorStopOption:='stop';
                 end;
-                Str:='';
             end;
 
             // The colon was replaced with an underscore by the FSMonitor daemon
@@ -650,11 +658,25 @@ begin
 #endif
 end;
 
+
+// Returns true if at least one GPG daemon was shut down successfully
+function ShutdownGPGDaemons():Boolean;
+var
+    i:Integer;
+begin
+    Result:=False;
+    for i:=0 to GetArrayLength(Processes)-1 do begin
+        if Processes[i].ToTerminate and IsGPGDaemonProcess(ChangeFileExt(Processes[i].Name, '')) then begin
+            if ExecSilently('"'+AppDir+'\usr\bin\gpgconf.exe" --kill all','gpg-stop','Could not stop GPG daemons') then
+                Result:=True;
+            Exit;
+        end;
+    end;
+end;
+
 procedure RefreshProcessList(Sender:TObject);
 var
-    Version:TWindowsVersion;
     Modules:TArrayOfString;
-    ProcsCloseRequired,ProcsCloseOptional:ProcessList;
     i:Longint;
     Caption:String;
     ManualClosingRequired:Boolean;
@@ -674,7 +696,7 @@ begin
     AppendToArray(Modules,AppDir+'\{#MINGW_BITNESS}\libexec\git-core\zlib1.dll');
     SessionHandle:=FindProcessesUsingModules(Modules,Processes);
 
-    if (GetArrayLength(Processes)>0) and ShutdownFSMonitorDaemons() then begin
+    if (GetArrayLength(Processes)>0) and (ShutdownFSMonitorDaemons() or ShutdownGPGDaemons()) then begin
         // We potentially shut down at least one process, refresh again
         RmEndSession(SessionHandle);
         SessionHandle:=FindProcessesUsingModules(Modules,Processes);
@@ -713,7 +735,7 @@ begin
     Env[0]:=Value;
 
     // Try to set the variable as specified by the user.
-    if not SetEnvStrings(Name,Env,Expandable,IsAdminLoggedOn,True) then
+    if not SetEnvStrings(Name,Env,Expandable,IsAdmin,True) then
         LogError('Line {#__LINE__}: Unable to set the '+Name+' environment variable.')
     else begin
         // Mark that we have changed the variable by writing its value to a file.
@@ -728,12 +750,12 @@ var
    Env:TArrayOfString;
    FileName:String;
 begin
-    Env:=GetEnvStrings(Name,IsAdminLoggedOn);
+    Env:=GetEnvStrings(Name,IsAdmin);
     FileName:=ExpandConstant('{app}')+'\setup.ini';
 
     if (GetArrayLength(Env)=1) and
        (CompareStr(RemoveQuotes(Env[0]),GetIniString('Environment',Name,'',FileName))=0) then begin
-        if not SetEnvStrings(Name,[],False,IsAdminLoggedOn,True) then
+        if not SetEnvStrings(Name,[],False,IsAdmin,True) then
             LogError('Line {#__LINE__}: Unable to delete the '+Name+' environment variable.');
     end;
 end;
@@ -754,21 +776,21 @@ end;
 
 function GitSystemConfigSet(Key,Value:String):Boolean;
 var
-    ExitCode:DWORD;
-    StdOut,StdErr:String;
+    ExitCode:Integer;
+    Output:TExecOutput;
 begin
     if (Value=#0) then begin
-        if ExecWithCapture('"'+AppDir+'\{#MINGW_BITNESS}\bin\git.exe" config --system --unset-all '+Key,StdOut,StdErr,ExitCode) And ((ExitCode=0) Or (ExitCode=5)) then
+        if ExecAndCaptureOutput(AppDir+'\{#MINGW_BITNESS}\bin\git.exe', 'config --system --unset-all '+Key, '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, Output) And ((ExitCode=0) Or (ExitCode=5)) then
             // exit code 5 means it was already unset, so that's okay
             Result:=True
         else begin
-            LogError('Unable to unset system config "'+Key+'": exit code '+IntToStr(ExitCode)+#13+#10+StdOut+#13+#10+'stderr:'+#13+#10+StdErr);
+            LogError('Unable to unset system config "'+Key+'": exit code '+IntToStr(ExitCode)+#13+#10+StringJoin(#13+#10,Output.StdOut)+#13+#10+'stderr:'+#13+#10+StringJoin(#13+#10,Output.StdErr));
             Result:=False
         end
-    end else if ExecWithCapture('"'+AppDir+'\{#MINGW_BITNESS}\bin\git.exe" config --system --replace-all '+ShellQuote(Key)+' '+ShellQuote(Value),StdOut,StdErr,ExitCode) And (ExitCode=0) then
+    end else if ExecAndCaptureOutput(AppDir+'\{#MINGW_BITNESS}\bin\git.exe', 'config --system --replace-all '+ShellQuote(Key)+' '+ShellQuote(Value), '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, Output) And (ExitCode=0) then
         Result:=True
     else begin
-        LogError('Unable to set system config "'+Key+'":="'+Value+'": exit code '+IntToStr(ExitCode)+#13+#10+StdOut+#13+#10+'stderr:'+#13+#10+StdErr);
+        LogError('Unable to set system config "'+Key+'":="'+Value+'": exit code '+IntToStr(ExitCode)+#13+#10+StringJoin(#13+#10,Output.StdOut)+#13+#10+'stderr:'+#13+#10+StringJoin(#13+#10,Output.StdErr));
         Result:=False;
     end;
 end;
@@ -795,11 +817,28 @@ end;
 
 function GetDefaultsFromGitConfig(WhichOne:String):Boolean;
 var
-    ExtraOptions,StdOut,StdErr,Key,Value:String;
-    ExitCode:DWORD;
-    Values:TArrayOfString;
-    c,i,j,k:Integer;
+    InstalledGitExe,ExtraOptions,StdOut,Key,Value:String;
+    ExitCode,c,i,j,k:Integer;
+    Output:TExecOutput;
 begin
+    if AppDir='' then begin
+        // No previous installation detected, therefore we cannot execute `git config`
+        Result:=True;
+        Exit;
+    end;
+
+    InstalledGitExe:=AppDir+'\{#MINGW_BITNESS}\bin\git.exe';
+#if MINGW_BITNESS=='ucrt64'
+    if not FileExists(InstalledGitExe) then
+        // It could be an upgrade from MINGW64 to UCRT64
+        InstalledGitExe:=AppDir+'\mingw64\bin\git.exe';
+#endif
+    if not FileExists(InstalledGitExe) then begin
+        // AppDir might be a left-over from an incompletely-removed installation
+        Result:=True;
+        Exit
+    end;
+
     case WhichOne of
     'ProgramData': ExtraOptions:='-f "'+ExpandConstant('{commonappdata}\Git\config')+'"';
     'system': ExtraOptions:='--system';
@@ -811,22 +850,23 @@ begin
         end
     end;
 
-    if not ExecWithCapture('"'+AppDir+'\{#MINGW_BITNESS}\bin\git.exe" config -l -z '+ExtraOptions,StdOut,StdErr,ExitCode) then begin
-        if FileExists(AppDir+'\{#MINGW_BITNESS}\bin\git.exe') then
-            LogError('Unable to get system config (exit code '+IntToStr(ExitCode)+'):'+#13+#10+StdErr);
-    end;
+    if not ExecAndCaptureOutput(InstalledGitExe, 'config -l -z '+ExtraOptions, '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, Output) then
+        LogError('Unable to get system config (exit code '+IntToStr(ExitCode)+'):'+#13+#10+StringJoin(#13+#10,Output.StdErr));
 
-    // Split NUL-delimited key/value pairs, extract LF that denotes end of key
+    // `config -l -z` writes `<key>LF<value>NUL` pairs
+    StdOut:=StringJoin(#10,Output.StdOut);
     Value:=StdOut;
+    // j iterates through the entire output;
+    // i tracks the start of the key, k of its end
     i:=1; j:=i; k:=i;
     while (j<=Length(StdOut)) do begin
         c:=Ord(StdOut[j]);
-        if (c=10) then
+        if (i=k) and (c=10) then // first found LF marks the end of key
             k:=j
-        else if (c=0) then begin
-            if (i<>k) then begin // Ignore keys without values
-                Key:=Copy(StdOut,i,k-i);
-                Value:=Copy(StdOut,k+1,j-k-1);
+        else if (c=0) then begin // found the end of the value
+            if (i<>k) then begin // Ignore keys without values (LF is missing)
+                Key:=Copy(StdOut,i,k-i); // skip the LF delimiter
+                Value:=Copy(StdOut,k+1,j-k-1); // skip both LF and NUL delimiters
                 case Key of
                     'http.sslbackend':
                         case Value of
@@ -846,12 +886,12 @@ begin
                         end;
                     'credential.helper':
                         case Value of
-                            'manager': RecordInferredDefault('Use Credential Manager','Core');
-                            'manager-core': RecordInferredDefault('Use Credential Manager','Core');
+                            'manager': RecordInferredDefault('Use Credential Manager','Enabled');
+                            'manager-core': RecordInferredDefault('Use Credential Manager','Enabled');
                         else
                             begin
-                                if EndsWith(Value, 'manager-core') then
-                                    RecordInferredDefault('Use Credential Manager','Core')
+                                if EndsWith(Value,'manager-core') or EndsWith(Value,'manager') then
+                                    RecordInferredDefault('Use Credential Manager','Enabled')
                                 else
                                     RecordInferredDefault('Use Credential Manager','Disabled');
                             end;
@@ -870,11 +910,16 @@ begin
                             'true': RecordInferredDefault('Git Pull Behavior Option','Rebase');
                             'false': RecordInferredDefault('Git Pull Behavior Option','Merge');
                         end;
+                    'init.defaultbranch':
+                        if Value='master' then
+                            RecordInferredDefault('Default Branch Option', ' ')
+                        else
+                            RecordInferredDefault('Default Branch Option', Value)
                 end;
             end;
-            i:=j+1;
+            i:=j+1; // the next key starts after the NUL
             j:=i;
-            k:=i;
+            k:=i; // set the end of the key to the start, to identify value-less entries
         end;
         j:=j+1;
     end;
@@ -899,6 +944,22 @@ begin
         Result:=-1;
 end;
 
+function IsRCVersion(var Pos:Integer;Version:String):Boolean;
+begin
+    if (Pos+2<=Length(Version)) and
+       ((Copy(Version,Pos,3)='-rc') or
+        (Copy(Version,Pos,3)='.rc')) then begin
+        Pos:=Pos+3;
+        Result:=True
+    end else if (Pos+1<=Length(Version)) and
+                ((Copy(Version,Pos,2)='rc') or
+                  (Copy(Version,Pos,2)='rc')) then begin
+        Pos:=Pos+2;
+        Result:=True
+    end else
+        Result:=False;
+end;
+
 function VersionCompare(CurrentVersion,PreviousVersion:String):Integer;
 var
     i,j,Current,Previous:Integer;
@@ -918,8 +979,6 @@ begin
         Previous:=NextNumber(PreviousVersion,j);
         Current:=NextNumber(CurrentVersion,i);
         if Previous<0 then begin
-            if Current>=0 then
-                Result:=+1;
             Result:=Ord(CurrentVersion[i])-Ord(PreviousVersion[j]);
             if (Result=0) then begin
                 // skip identical non-numerical characters
@@ -927,6 +986,9 @@ begin
                 j:=j+1;
                 Continue;
             end;
+            // special-case `.vfs.` versions; They are neither downgrades nor upgrades.
+            if (Copy(CurrentVersion,i,4)='vfs.') or (Copy(PreviousVersion,i,4)='vfs.') then
+                Result:=0;
             Exit;
         end;
         if Current<0 then begin
@@ -942,16 +1004,31 @@ begin
             Exit;
         end;
         if j>Length(PreviousVersion) then begin
-            if i<=Length(CurrentVersion) then
-                Result:=+1;
+            if i<=Length(CurrentVersion) then begin
+                // an -rc version is considered "smaller"
+                if IsRCVersion(i,CurrentVersion) then
+                    Result:=-1
+                else
+                    Result:=+1;
+            end;
             Exit;
         end;
         if i>Length(CurrentVersion) then begin
-            Result:=-1;
+                // an -rc version is considered "smaller"
+                if IsRCVersion(j,PreviousVersion) then
+                    Result:=+1
+                else
+                    Result:=-1;
             Exit;
         end;
         if CurrentVersion[i]<>PreviousVersion[j] then begin
-            if PreviousVersion[j]='.' then
+            if IsRCVersion(i,CurrentVersion) then begin
+                if IsRCVersion(j,PreviousVersion) then
+                    Continue;
+                Result:=-1
+            end else if IsRCVersion(j,PreviousVersion) then
+                Result:=+1
+            else if PreviousVersion[j]='.' then
                 Result:=-1
             else
                 Result:=+1;
@@ -989,15 +1066,16 @@ var
 
 function GetPreviousGitVersion():String;
 var
-    Path,StdOut,StdErr:String;
-    ExitCode:DWORD;
+    Path:String;
+    ExitCode:Integer;
+    Output:TExecOutput;
 begin
     if not PreviousGitVersionInitialized then begin
         PreviousGitVersionInitialized:=True;
         if (RegQueryStringValue(HKEY_LOCAL_MACHINE,'Software\GitForWindows','InstallPath',Path))
-                and (ExecWithCapture('"'+Path+'\cmd\git.exe" version',StdOut,StdErr,ExitCode))
+                and (ExecAndCaptureOutput(Path+'\cmd\git.exe', 'version', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ExitCode, Output))
                 and (ExitCode=0) then begin
-            PreviousGitVersion:=Trim(StdOut);
+            PreviousGitVersion:=Trim(Output.StdOut[0]);
         end;
     end;
     Result:=PreviousGitVersion;
@@ -1079,22 +1157,60 @@ begin
         WizardForm.NextButton.Caption:=SetupMessage(msgButtonNext);
 end;
 
+function SelfCheckVersionCompare(A,B:String;ExpectedOutcome:Integer):Boolean;
+var
+    ActualOutcome:Integer;
+begin
+    ActualOutcome:=VersionCompare(A,B);
+    if ((ActualOutcome=0) and (ExpectedOutcome=0)) or
+       ((ActualOutcome<0) and (ExpectedOutcome<0)) or
+       ((ActualOutcome>0) and (ExpectedOutcome>0)) then
+        Result:=True
+    else
+        LogError('VersionCompare('+A+','+B+')='+IntToStr(VersionCompare(A,B))+' but expected '+IntToStr(ExpectedOutcome));
+end;
+
+procedure SelfCheck;
+var
+    Failed:Boolean;
+begin
+    if not SelfCheckVersionCompare('2.32.0','2.32.1',-1) or
+       not SelfCheckVersionCompare('2.32.1','2.32.0',1) or
+       not SelfCheckVersionCompare('2.32.1.vfs.0.0','2.32.0',1) or
+       not SelfCheckVersionCompare('2.32.1.vfs.0.0','2.32.0.vfs.0.0',1) or
+       not SelfCheckVersionCompare('2.32.0.vfs.0.1','2.32.0.vfs.0.2',-1) or
+       not SelfCheckVersionCompare('2.32.0-rc0','2.31.1',1) or
+       not SelfCheckVersionCompare('2.31.1','2.32.0-rc0',-1) or
+       not SelfCheckVersionCompare('2.32.0-rc2','2.32.0',-1) or
+       not SelfCheckVersionCompare('2.32.0-rc2','2.32.0.0',-1) or
+       not SelfCheckVersionCompare('2.34.0.rc1','2.33.1',1) or
+       not SelfCheckVersionCompare('2.34.0.rc2','2.34.0',-1) or
+       not SelfCheckVersionCompare('git version 2.46.0.vfs.0.0','git version 2.46.0.windows.1',0) then
+        Failed:=True;
+
+    if Failed then
+        ExitProcess(1);
+end;
+
 function InitializeSetup:Boolean;
+#if APP_VERSION!='0-test'
 var
     CurrentVersion,Msg:String;
-    ErrorCode:Integer;
+#endif
 begin
+#ifdef INCLUDE_SELF_CHECK
+    SelfCheck;
+#ifdef EXIT_AFTER_SELF_CHECK
+    ExitProcess(0);
+#endif
+#endif
     UpdateInfFilenames;
-#if BITNESS=='32'
-    Result:=True;
-#else
     if not IsWin64 then begin
         LogError('The 64-bit version of Git requires a 64-bit Windows. Aborting.');
         Result:=False;
     end else begin
         Result:=True;
     end;
-#endif
     RegQueryStringValue(HKEY_LOCAL_MACHINE,'Software\GitForWindows','CurrentVersion',PreviousGitForWindowsVersion);
     // The Windows Terminal profile is new in v2.32.0
     HasUnseenComponents:=IsUpgrade('2.32.0');
@@ -1161,20 +1277,21 @@ begin
         i:=InferredDefaultKeys.IndexOf(Key); // cannot use .Find because the list is not sorted
         if (i>=0) then
             Result:=InferredDefaultValues[i]
-        else
+        else begin
             // Restore the settings chosen during a previous install.
             Result:=GetPreviousData(Key,Default);
             // Check to see if this result was the default, or was previously set.
             // If it was the default, the user has not seen this option yet.
             if GetPreviousData(Key,'z'+Result)<>Result then
                 AddToSet(CustomPagesWithUnseenOptions,CurrentCustomPageID)
+        end
     end;
 end;
 
 function DetectNetFxVersion:Cardinal;
 begin
-    // We are only interested in version v4.5.1 or later, therefore it
-    // is enough to only use the 4.5 method described in
+    // We are only interested in version v4.7.2 or later, therefore it
+    // is enough to only use the "4.5 and later" method described in
     // https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed
     if IsWin64 then begin
         if (
@@ -1226,7 +1343,7 @@ procedure OpenSymlinksWikiPage(Sender:TObject);
 var
   ExitStatus:Integer;
 begin
-  ShellExec('','https://github.com/git-for-windows/git/wiki/Symbolic-Links','','',SW_SHOW,ewNoWait,ExitStatus);
+  ShellExec('','https://gitforwindows.org/symbolic-links','','',SW_SHOW,ewNoWait,ExitStatus);
 end;
 
 function IsOriginalUserAdmin():Boolean;
@@ -1241,7 +1358,6 @@ end;
 function EnableSymlinksByDefault():Boolean;
 var
     SymlinksForRegularUsers:Cardinal;
-    Root:Integer;
     ResultCode:Integer;
     Version:TWindowsVersion;
 begin
@@ -1258,7 +1374,7 @@ begin
 
     if IsOriginalUserAdmin then begin
         // detection only works when we're not running as admin
-        Log('Symbolic link permission detection failed: running as admin');
+        Log('Skipping symbolic link permission detection: running as admin');
         Result:=False;
     end else begin
         // maybe rights assigned through group policy without enabling developer mode?
@@ -1348,8 +1464,8 @@ end;
 function CreateItemDescription(Page:TWizardPage;const Description:String;var Top,Left:Integer;var Labels:array of TLabel;Visible:Boolean):TLabel;
 var
     SubLabel:TLabel;
-    Untagged,RowPrefix,Link:String;
-    RowStart,RowCount,i,j:Integer;
+    Untagged,RowPrefix:String;
+    RowCount,i,j:Integer;
 begin
     Untagged:='';
     Result:=TLabel.Create(Page);
@@ -1358,7 +1474,6 @@ begin
     Result.Top:=ScaleY(Top);
     Result.Left:=ScaleX(Left+24);
     Result.Width:=ScaleX(405);
-    Result.Height:=ScaleY(13);
     Result.Visible:=Visible;
     SetArrayLength(Labels,GetArrayLength(Labels)+1);
     Labels[GetArrayLength(Labels)-1]:=Result;
@@ -1369,8 +1484,7 @@ begin
             '': begin
                 Untagged:=Untagged+Description;
                 Result.Caption:=Untagged;
-                Result.Height:=ScaleY(13*RowCount);
-                Top:=Top+13+18;
+                Top:=Top+15+18;
                 Exit;
             end;
             ''+#13: begin
@@ -1378,7 +1492,7 @@ begin
                 Description:=SubString(Description,i+1,-1);
                 RowCount:=RowCount+1;
                 RowPrefix:='';
-                Top:=Top+13;
+                Top:=Top+15;
             end;
             '<RED>': begin
                 Untagged:=Untagged+SubString(Description,1,i-1);
@@ -1397,7 +1511,6 @@ begin
                     SubLabel.Top:=ScaleY(Top);
                     SubLabel.Left:=GetTextWidth(RowPrefix,Result.Font)+ScaleX(Left+24);
                     SubLabel.Width:=ScaleX(405);
-                    SubLabel.Height:=ScaleY(13);
                     SubLabel.Font.Color:=clRed;
                     SubLabel.Visible:=Visible;
                     Untagged:=Untagged+SubString(Description,1,j);
@@ -1415,7 +1528,6 @@ begin
                 SubLabel.Top:=ScaleY(Top);
                 SubLabel.Left:=GetTextWidth(RowPrefix,Result.Font)+ScaleX(Left+24);
                 SubLabel.Width:=ScaleX(405);
-                SubLabel.Height:=ScaleY(13*CountLines(SubLabel.Caption));
                 SubLabel.Font.Color:=clRed;
                 SubLabel.Visible:=Visible;
                 Untagged:=Untagged+SubString(Description,1,i-1);
@@ -1453,7 +1565,6 @@ begin
                     SubLabel.Top:=ScaleY(Top);
                     SubLabel.Left:=GetTextWidth(RowPrefix,Result.Font)+ScaleX(Left+24);
                     SubLabel.Width:=ScaleX(405);
-                    SubLabel.Height:=ScaleY(13);
                     SubLabel.Font.Color:=clBlue;
                     SubLabel.Font.Style:=[fsUnderline];
                     SubLabel.Cursor:=crHand;
@@ -1475,7 +1586,6 @@ begin
                 SubLabel.Top:=ScaleY(Top);
                 SubLabel.Left:=GetTextWidth(RowPrefix,Result.Font)+ScaleX(Left+24);
                 SubLabel.Width:=ScaleX(405);
-                SubLabel.Height:=ScaleY(13*CountLines(SubLabel.Caption));
                 SubLabel.Font.Color:=clBlue;
                 SubLabel.Font.Style:=[fsUnderline];
                 SubLabel.Cursor:=crHand;
@@ -1561,11 +1671,7 @@ end;
 function PathIsValidExecutable(var Path: String):Boolean;
 var
     Env,Path2,Ext:String;
-    PathExt:String;
-    ExtArray:TArrayOfString;
-    i,Len:Integer;
-    j:Integer;
-    ExtensionFlag:Boolean;
+    i:Integer;
 begin
     Result:=False;
     if Path='' then
@@ -1621,7 +1727,10 @@ begin
         Exit;
     end;
 
-    TmpFile:=ExpandConstant('{tmp}\editor-test.txt');
+    // We are _not_ writing into the `{tmp}` directory, because it is private to the
+    // elevated process and cannot be written to by the non-elevated editor.
+    // Instead, we write _next_ to the `{tmp}` directory.
+    TmpFile:=ExpandConstant('{tmp}-editor-test.txt');
     InputText:='Please modify this text, e.g. delete it, then save it and exit the editor.'
     SaveStringToFile(TmpFile,InputText,False);
 
@@ -1634,17 +1743,20 @@ begin
     if not ShellExecAsOriginalUser('',CustomEditorPath,CustomEditorOptions+' "'+TmpFile+'"','',Show,ewWaitUntilTerminated,Res) then begin
         Wizardform.NextButton.Enabled:=False;
         SuppressibleMsgBox('Could not launch: "'+CustomEditorPath+'"',mbError,MB_OK,IDOK);
+        DeleteFile(TmpFile); // ignore errors, if any
         Exit;
     end;
     if (Res<>0) then begin
         Wizardform.NextButton.Enabled:=False;
         SuppressibleMsgBox('Exited with failure: "'+CustomEditorPath+'"',mbError,MB_OK,IDOK);
+        DeleteFile(TmpFile); // ignore errors, if any
         Exit;
     end;
 
     if not LoadStringFromFile(TmpFile,OutputText) then begin
         Wizardform.NextButton.Enabled:=False;
         SuppressibleMsgBox('Could not read "'+TmpFile+'"',mbError,MB_OK,IDOK);
+        DeleteFile(TmpFile); // ignore errors, if any
         Exit;
     end;
 
@@ -1774,7 +1886,24 @@ begin
     Result:=ExtractFilePath(ExtractCommandPath(Command)) + Suffix;
 end;
 
+function GetMicrosoftEditPath:String;
+begin
+    Result:=ExpandConstant('{sys}\edit.exe');
+end;
+
 procedure QueryUninstallValues; forward;
+
+function IsHiddenExperimentalOptionsPageEmpty:Boolean;
+var
+    i:Integer;
+begin
+    Result:=True;
+#ifdef HAVE_EXPERIMENTAL_OPTIONS
+    for i:=1 to GP_MaxExperimental do
+        if (RdbExperimentalOptions[i]<>nil) and RdbExperimentalOptions[i].Visible then
+            Result:=False;
+#endif
+end;
 
 procedure InitializeWizard;
 var
@@ -1783,7 +1912,12 @@ var
     BtnPlink:TButton;
     Data:String;
     LblInfo:TLabel;
+    AslrSetting: AnsiString;
+    WasFSMonitorEnabled:Boolean;
+    Dummy:array of TLabel;
 begin
+    SanitizeGitEnvironmentVariables();
+
     InferredDefaultKeys:=TStringList.Create;
     InferredDefaultValues:=TStringList.Create;
     QueryUninstallValues();
@@ -1843,10 +1977,10 @@ begin
         EditorAvailable[GE_VisualStudioCodeInsiders]:=RegQueryStringValue(HKEY_CURRENT_USER,'Software\Classes\Applications\Code - Insiders.exe\shell\open\command','',VisualStudioCodeInsidersPath);
         VisualStudioCodeInsidersUserInstallation:=True;
     end;
-    SublimeTextPath:=ExpandConstant('{pf}\Sublime Text\subl.exe');
+    SublimeTextPath:=ExpandConstant('{commonpf}\Sublime Text\subl.exe');
     EditorAvailable[GE_SublimeText]:=PathIsValidExecutable(SublimeTextPath);
     if (not EditorAvailable[GE_SublimeText]) then begin
-        SublimeTextPath:=ExpandConstant('{pf}\Sublime Text 3\subl.exe');
+        SublimeTextPath:=ExpandConstant('{commonpf}\Sublime Text 3\subl.exe');
         EditorAvailable[GE_SublimeText]:=PathIsValidExecutable(SublimeTextPath);
         if (not EditorAvailable[GE_SublimeText]) then begin
             EditorAvailable[GE_SublimeText]:=RegQueryStringValue(HKEY_CURRENT_USER,'Software\Classes\Applications\sublime_text.exe\shell\open\command','',SublimeTextPath);
@@ -1860,6 +1994,10 @@ begin
         EditorAvailable[GE_VSCodium]:=RegQueryStringValue(HKEY_CURRENT_USER,'Software\Classes\Applications\VSCodium.exe\shell\open\command','',VSCodiumPath);
         VSCodiumUserInstallation:=True;
     end;
+
+    // We currently only support Edit from Windows Update
+    MicrosoftEditPath:=GetMicrosoftEditPath();
+    EditorAvailable[GE_MicrosoftEdit]:= (GetWindowsVersion >= $0A0065F4) and PathIsValidExecutable(MicrosoftEditPath);
 
     // Remove `" %1"` from end and unqote the string.
     if (EditorAvailable[GE_VisualStudioCode]) then
@@ -1885,7 +2023,7 @@ begin
     // 2nd choice
     Top:=TopOfLabels;
     CbbEditor.Items.Add('Use Vim (the ubiquitous text editor) as Git'+#39+'s default editor');
-    CreateItemDescription(EditorPage,'The <A HREF=http://www.vim.org/>Vim editor</A>, while powerful, <A HREF=https://stackoverflow.blog/2017/05/23/stack-overflow-helping-one-million-developers-exit-vim/>can be hard to use</A>. Its user interface is'+#13+'unintuitive and its key bindings are awkward.'+#13+#13+'<RED>Note:</RED> Vim is the default editor of Git for Windows only for historical reasons, and'+#13+'it is highly recommended to switch to a modern GUI editor instead.'+#13+#13+'<RED>Note:</RED> This will leave the '+#39+'core.editor'+#39+' option unset, which will make Git fall back'+#13+'to the '+#39+'EDITOR'+#39+' environment variable. The default editor is Vim - but you'+#13+'may set it to some other editor of your choice.',Top,Left,LblEditor[GE_VIM],False);
+    CreateItemDescription(EditorPage,'The <A HREF=http://www.vim.org/>Vim editor</A>, while powerful, <A HREF=https://stackoverflow.blog/2017/05/23/stack-overflow-helping-one-million-developers-exit-vim/>can be hard to use</A>. Its user interface is'+#13+'unintuitive and its key bindings are awkward.'+#13+#13+'<RED>Note:</RED> Vim is the default editor of Git for Windows only for historical reasons,'+#13+'and it is highly recommended to switch to a modern GUI editor instead.'+#13+#13+'<RED>Note:</RED> This will leave the '+#39+'core.editor'+#39+' option unset, which will make Git fall back'+#13+'to the '+#39+'EDITOR'+#39+' environment variable. The default editor is Vim - but you'+#13+'may set it to some other editor of your choice.',Top,Left,LblEditor[GE_VIM],False);
     EditorAvailable[GE_VIM]:=True;
 
     // 3rd choice
@@ -1933,14 +2071,19 @@ begin
     // 9th choice
     Top:=TopOfLabels;
     CbbEditor.Items.Add('Use Notepad as Git'+#39+'s default editor');
-    CreateItemDescription(EditorPage,'<RED>(NEW!)</RED> Notepad is a simple GUI editor that comes with windows.',Top,Left,LblEditor[GE_Notepad],False);
+    CreateItemDescription(EditorPage,'Notepad is a simple GUI editor that comes with Windows.',Top,Left,LblEditor[GE_Notepad],False);
     EditorAvailable[GE_Notepad]:=True;
 
     // 10th choice
     Top:=TopOfLabels;
     CbbEditor.Items.Add('Use Wordpad as Git'+#39+'s default editor');
-    CreateItemDescription(EditorPage,'<RED>(NEW!)</RED> Wordpad is a basic word processor that comes with windows.'+#13+'It can also be used as a text editor.',Top,Left,LblEditor[GE_Wordpad],False);
+    CreateItemDescription(EditorPage,'Wordpad is a basic word processor that comes with Windows.'+#13+'It can also be used as a text editor.',Top,Left,LblEditor[GE_Wordpad],False);
     EditorAvailable[GE_Wordpad]:=True;
+
+    // 11th choice
+    Top:=TopOfLabels;
+    CbbEditor.Items.Add('Use Microsoft Edit as Git'+#39+'s default editor');
+    CreateItemDescription(EditorPage,'<RED>(NEW!)</RED> <A HREF=https://github.com/microsoft/edit>Edit</A> is an open source terminal-based text editor which is based on the'+#13+'classic MS-DOS text editor.',Top,Left,LblEditor[GE_MicrosoftEdit],False);
 
     // Custom choice
     Top:=TopOfLabels;
@@ -2004,6 +2147,12 @@ begin
         end;
     'Notepad': CbbEditor.ItemIndex:=GE_Notepad;
     'Wordpad': CbbEditor.ItemIndex:=GE_Wordpad;
+    'MicrosoftEdit': begin
+            if EditorAvailable[GE_MicrosoftEdit] then
+                CbbEditor.ItemIndex:=GE_MicrosoftEdit
+            else
+                CbbEditor.ItemIndex:=GE_VIM;
+        end;
     'CustomEditor': begin
             CbbEditor.ItemIndex:=GE_CustomEditor;
             EditorPage.Values[0]:=ReplayChoice('Custom Editor Path','');
@@ -2025,11 +2174,11 @@ begin
     DefaultBranchPage:=CreatePage(PrevPageID,'Adjusting the name of the initial branch in new repositories','What would you like Git to name the initial branch after "git init"?',TabOrder,Top,Left);
 
     // 1st choice
-    RdbDefaultBranch[DB_Unspecified]:=CreateRadioButton(DefaultBranchPage,'Let Git decide','Let Git use its default branch name (currently: "{#DEFAULT_BRANCH_NAME}") for the initial branch'+#13+'in newly created repositories. The Git project <A HREF=https://sfconservancy.org/news/2020/jun/23/gitbranchname/>intends</A> to change this default to'+#13+'a more inclusive name in the near future.',TabOrder,Top,Left);
+    RdbDefaultBranch[DB_Unspecified]:=CreateRadioButton(DefaultBranchPage,'Let Git decide','Let Git use its default branch name (currently: "{#DEFAULT_BRANCH_NAME}") for the initial branch'+#13+'in newly created repositories.',TabOrder,Top,Left);
     RdbDefaultBranch[DB_Unspecified].OnClick:=@DefaultBranchOptionChanged;
 
     // 2nd choice
-    RdbDefaultBranch[DB_Manual]:=CreateRadioButton(DefaultBranchPage,'Override the default branch name for new repositories','<RED>NEW!</RED> Many teams already renamed their default branches; common choices are'+#13+'"main", "trunk" and "development". Specify the name "git init" should use for the'+#13+'initial branch:',TabOrder,Top,Left);
+    RdbDefaultBranch[DB_Manual]:=CreateRadioButton(DefaultBranchPage,'Override the default branch name for new repositories','Many teams already renamed their default branches; common choices'+#13+'are "main", "trunk" and "development". Specify the name "git init" should use'+#13+'for the initial branch:',TabOrder,Top,Left);
     RdbDefaultBranch[DB_Manual].OnClick:=@DefaultBranchOptionChanged;
 
     // Text field for the overridden branch name
@@ -2072,10 +2221,10 @@ begin
     PathPage:=CreatePage(PrevPageID,'Adjusting your PATH environment','How would you like to use Git from the command line?',TabOrder,Top,Left);
 
     // 1st choice
-    RdbPath[GP_BashOnly]:=CreateRadioButton(PathPage,'Use Git from Git Bash only','This is the most cautious choice as your PATH will not be modified at all. You will'+#13+'only be able to use the Git command line tools from Git Bash.',TabOrder,Top,Left);
+    RdbPath[GP_BashOnly]:=CreateRadioButton(PathPage,'Use Git from Git Bash only','This is the most cautious choice as your PATH will not be modified at all. You'+#13+'will only be able to use the Git command line tools from Git Bash.',TabOrder,Top,Left);
 
     // 2nd choice
-    RdbPath[GP_Cmd]:=CreateRadioButton(PathPage,'Git from the command line and also from 3rd-party software','<RED>(Recommended)</RED> This option adds only some minimal Git wrappers to your'+#13+'PATH to avoid cluttering your environment with optional Unix tools.'+#13+'You will be able to use Git from Git Bash, the Command Prompt and the Windows'+#13+'PowerShell as well as any third-party software looking for Git in PATH.',TabOrder,Top,Left);
+    RdbPath[GP_Cmd]:=CreateRadioButton(PathPage,'Git from the command line and also from 3rd-party software','<RED>(Recommended)</RED> This option adds only some minimal Git wrappers to your'+#13+'PATH to avoid cluttering your environment with optional Unix tools. You will'+#13+'be able to use Git from Git Bash, the Command Prompt and the Windows'+#13+'PowerShell as well as any third-party software looking for Git in PATH.',TabOrder,Top,Left);
 
     // 3rd choice
     RdbPath[GP_CmdTools]:=CreateRadioButton(PathPage,'Use Git and optional Unix tools from the Command Prompt','Both Git and the optional Unix tools will be added to your PATH.'+#13+'<RED>Warning: This will override Windows tools like "find" and "sort". Only'+#13+'use this option if you understand the implications.</RED>',TabOrder,Top,Left);
@@ -2112,7 +2261,7 @@ begin
             with EdtPlink do begin
                 Parent:=SSHChoicePage.Surface;
 
-                EnvSSH:=GetEnvStrings('GIT_SSH',IsAdminLoggedOn);
+                EnvSSH:=GetEnvStrings('GIT_SSH',IsAdmin);
                 if (GetArrayLength(EnvSSH)=1) and IsPlinkExecutable(EnvSSH[0]) then begin
                     Text:=EnvSSH[0];
                 end;
@@ -2162,7 +2311,7 @@ begin
 
         // 3rd choice
         RdbSSH[GS_ExternalOpenSSH]:=CreateRadioButton(SSHChoicePage,'Use external OpenSSH',
-            '<RED>NEW!</RED> This uses an external ssh.exe. Git will not install its own OpenSSH'+#13+
+            'This uses an external ssh.exe. Git will not install its own OpenSSH'+#13+
             '(and related) binaries but use them as found on the PATH.',
             TabOrder,Top,Left);
 
@@ -2199,11 +2348,11 @@ begin
     RdbCurlVariant[GC_WinSSL]:=CreateRadioButton(CurlVariantPage,'Use the native Windows Secure Channel library','Server certificates will be validated using Windows Certificate Stores.'+#13+'This option also allows you to use your company''s internal Root CA certificates'+#13+'distributed e.g. via Active Directory Domain Services.',TabOrder,Top,Left);
 
     // Restore the setting chosen during a previous install.
-    case ReplayChoice('CURL Option','OpenSSL') of
+    case ReplayChoice('CURL Option','WinSSL') of
         'OpenSSL': RdbCurlVariant[GC_OpenSSL].Checked:=True;
         'WinSSL': RdbCurlVariant[GC_WinSSL].Checked:=True;
     else
-        RdbCurlVariant[GC_OpenSSL].Checked:=True;
+        RdbCurlVariant[GC_WinSSL].Checked:=True;
     end;
 
     (*
@@ -2237,10 +2386,10 @@ begin
     BashTerminalPage:=CreatePage(PrevPageID,'Configuring the terminal emulator to use with Git Bash','Which terminal emulator do you want to use with your Git Bash?',TabOrder,Top,Left);
 
     // 1st choice
-    RdbBashTerminal[GB_MinTTY]:=CreateRadioButton(BashTerminalPage,'Use MinTTY (the default terminal of MSYS2)','Git Bash will use MinTTY as terminal emulator, which sports a resizable window,'+#13+'non-rectangular selections and a Unicode font. Windows console programs (such'+#13+'as interactive Python) must be launched via `winpty` to work in MinTTY.',TabOrder,Top,Left);
+    RdbBashTerminal[GB_MinTTY]:=CreateRadioButton(BashTerminalPage,'Use MinTTY (the default terminal of MSYS2)','Git Bash will use MinTTY as terminal emulator, which sports a resizable'+#13+'window, non-rectangular selections and a Unicode font. Windows console'+#13+'programs (such as interactive Python) must be launched via `winpty` to work'+#13+'in MinTTY.',TabOrder,Top,Left);
 
     // 2nd choice
-    RdbBashTerminal[GB_ConHost]:=CreateRadioButton(BashTerminalPage,'Use Windows'' default console window','Git will use the default console window of Windows ("cmd.exe"), which works well'+#13+'with Win32 console programs such as interactive Python or node.js, but has a'+#13+'very limited default scroll-back, needs to be configured to use a Unicode font in'+#13+'order to display non-ASCII characters correctly, and prior to Windows 10 its'+#13+'window was not freely resizable and it only allowed rectangular text selections.',TabOrder,Top,Left);
+    RdbBashTerminal[GB_ConHost]:=CreateRadioButton(BashTerminalPage,'Use Windows'' default console window','Git will use the default console window of Windows ("cmd.exe"), which works'+#13+'well with Win32 console programs such as interactive Python or node.js, but'+#13+'has a very limited default scroll-back, needs to be configured to use a Unicode'+#13+'font in order to display non-ASCII characters correctly, and prior to'+#13+'Windows 10 its window was not freely resizable and it only allowed'+#13+'rectangular text selections.',TabOrder,Top,Left);
 
     // Restore the setting chosen during a previous install.
     case ReplayChoice('Bash Terminal Option','MinTTY') of
@@ -2254,16 +2403,19 @@ begin
      * Create a custom page for the default behavior of `git pull`.
      *)
 
-    GitPullBehaviorPage:=CreatePage(PrevPageID,'Choose the default behavior of `git pull`','What should `git pull` do by default?',TabOrder,Top,Left);
+    GitPullBehaviorPage:=CreatePage(PrevPageID,'Choose the default behavior of `git pull`','Pulling always attempts a fast-forward first.',TabOrder,Top,Left);
 
     // 1st choice
-    RdbGitPullBehavior[GP_GitPullMerge]:=CreateRadioButton(GitPullBehaviorPage,'Default (fast-forward or merge)','This is the standard behavior of `git pull`: fast-forward the current branch to'+#13+'the fetched branch when possible, otherwise create a merge commit.',TabOrder,Top,Left);
+    RdbGitPullBehavior[GP_GitPullMerge]:=CreateRadioButton(GitPullBehaviorPage,'Merge','Create a merge commit to combine branches. This preserves the history of parallel work.',TabOrder,Top,Left);
 
     // 2nd choice
-    RdbGitPullBehavior[GP_GitPullRebase]:=CreateRadioButton(GitPullBehaviorPage,'Rebase','Rebase the current branch onto the fetched branch. If there are no local'+#13+'commits to rebase, this is equivalent to a fast-forward.',TabOrder,Top,Left);
+    RdbGitPullBehavior[GP_GitPullRebase]:=CreateRadioButton(GitPullBehaviorPage,'Rebase','Rewrite your local commits on top of the remote branch, keeping a single linear timeline.',TabOrder,Top,Left);
 
     // 3rd choice
-    RdbGitPullBehavior[GP_GitPullFFOnly]:=CreateRadioButton(GitPullBehaviorPage,'Only ever fast-forward','Fast-forward to the fetched branch. Fail if that is not possible.',TabOrder,Top,Left);
+    RdbGitPullBehavior[GP_GitPullFFOnly]:=CreateRadioButton(GitPullBehaviorPage,'Fast-forward only','Safely abort if a fast-forward is not possible.'+#13+'This is the default behavior of `git pull`.',TabOrder,Top,Left);
+
+    // Footer note
+    CreateItemDescription(GitPullBehaviorPage,'Need help choosing? Read <A HREF=https://gitforwindows.org/choosing-the-default-behavior-of-git-pull.html>this guide</A>.',Top,Left,Dummy,True);
 
     // Restore the setting chosen during a previous install.
     case ReplayChoice('Git Pull Behavior Option','Merge') of
@@ -2280,24 +2432,25 @@ begin
 
     GitCredentialManagerPage:=CreatePage(PrevPageID,'Choose a credential helper','Which credential helper should be configured?',TabOrder,Top,Left);
 
-    // Git Credential Manager Core
-    RdbGitCredentialManager[GCM_Core]:=CreateRadioButton(GitCredentialManagerPage,'Git Credential Manager Core','<RED>(NEW!)</RED> Use the new, <A HREF=https://github.com/microsoft/Git-Credential-Manager-Core>cross-platform version of the Git Credential Manager</A>.'+#13+'See more information about the future of Git Credential Manager <A HREF=https://github.com/microsoft/Git-Credential-Manager-Core/blob/master/docs/faq.md#about-the-project>here</A>.',TabOrder,Top,Left);
+    // Git Credential Manager
+    RdbGitCredentialManager[GCM]:=CreateRadioButton(GitCredentialManagerPage,'Git Credential Manager','Use the <A HREF=https://github.com/GitCredentialManager/git-credential-manager>cross-platform Git Credential Manager</A>.'+#13+'See more information about the future of Git Credential Manager <A HREF=https://github.com/GitCredentialManager/git-credential-manager/blob/HEAD/docs/faq.md#about-the-project>here</A>.',TabOrder,Top,Left);
 
     // No credential helper
-    RdbGitCredentialManager[GCM_None]:=CreateRadioButton(GitCredentialManagerPage,'None','Do not use a credential helper.',TabOrder,Top,Left);
+    RdbGitCredentialManager[GCM_None]:=CreateRadioButton(GitCredentialManagerPage,'None','Do not use a credential helper.'+#13+#13+'Note: Select only for headless environments, SSH-only workflows,'+#13+'or custom credential helpers. Otherwise, Git will prompt for'+#13+'credentials on every HTTPS operation.',TabOrder,Top,Left);
 
-    // Restore the settings chosen during a previous install, if .NET 4.5.1
+    // Restore the settings chosen during a previous install, if .NET Framework 4.7.2
     // or later is available.
-    if DetectNetFxVersion()<378675 then begin
-        RdbGitCredentialManager[GCM_Core].Checked:=False;
-        RdbGitCredentialManager[GCM_Core].Enabled:=False;
+    if DetectNetFxVersion()<461808 then begin
+        RdbGitCredentialManager[GCM].Checked:=False;
+        RdbGitCredentialManager[GCM].Enabled:=False;
+        RdbGitCredentialManager[GCM].Caption:=RdbGitCredentialManager[GCM].Caption+' (requires .NET Framework >= 4.7.2)'
     end else begin
-        case ReplayChoice('Use Credential Manager','Core') of
+        case ReplayChoice('Use Credential Manager','Enabled') of
             'Disabled': RdbGitCredentialManager[GCM_None].Checked:=True;
-            'Enabled': RdbGitCredentialManager[GCM_Core].Checked:=True;
-            'Core': RdbGitCredentialManager[GCM_Core].Checked:=True;
+            'Enabled': RdbGitCredentialManager[GCM].Checked:=True;
+            'Core': RdbGitCredentialManager[GCM].Checked:=True;
         else
-            RdbGitCredentialManager[GCM_Core].Checked:=True;
+            RdbGitCredentialManager[GCM].Checked:=True;
         end;
     end;
 
@@ -2314,7 +2467,7 @@ begin
     RdbExtraOptions[GP_FSCache].Checked:=ReplayChoice('Performance Tweaks FSCache','Enabled')<>'Disabled';
 
     // 2nd option
-    RdbExtraOptions[GP_Symlinks]:=CreateCheckBox(ExtraOptionsPage,'Enable symbolic links','Enable <A HREF=https://github.com/git-for-windows/git/wiki/Symbolic-Links>symbolic links</A> (requires the SeCreateSymbolicLink permission).'+#13+'Please note that existing repositories are unaffected by this setting.',TabOrder,Top,Left);
+    RdbExtraOptions[GP_Symlinks]:=CreateCheckBox(ExtraOptionsPage,'Enable symbolic links','Enable <A HREF=https://gitforwindows.org/symbolic-links>symbolic links</A> (requires the SeCreateSymbolicLink permission).'+#13+'Please note that existing repositories are unaffected by this setting.',TabOrder,Top,Left);
 
     // Restore the settings chosen during a previous install, or auto-detect
     // by running `mklink` (unless started as administrator, in which case that
@@ -2328,6 +2481,17 @@ begin
     end;
 
     RdbExtraOptions[GP_Symlinks].Checked:=Data<>'Disabled';
+
+#ifdef DEBUG_WIZARD_PAGE
+    if ('{#DEBUG_WIZARD_PAGE}'='SecurityOptionsPage.ID') then begin
+#else
+    if RegQueryBinaryValue(HKEY_LOCAL_MACHINE, 'SYSTEM\CurrentControlSet\Control\Session Manager\kernel', 'MitigationOptions', AslrSetting) and
+        (Length(AslrSetting)>1) and (AslrSetting[2]=AnsiChar(#01)) then begin
+#endif
+        SecurityOptionsPage:=CreatePage(PrevPageID,'Security options','Add mandatory ASLR security exceptions?',TabOrder,Top,Left);
+        RdbSecurityOptions[SO_MandatoryASLR]:=CreateCheckBox(SecurityOptionsPage, 'Add mandatory ASLR security exceptions','Add mandatory ASLR security exceptions for the executables in the "usr/bin"'+#13+'directory and Git Bash to function correctly on Windows systems with'+#13+'mandatory ASLR enabled which is a Windows security feature that is'+#13+'disabled by default but appears to be enabled on your system.'+#13++#13+'<RED>WARNING</RED>: If you have installed Git to a path modifiable by an unprivileged user'+#13+'or an external drive this will add mandatory ASLR security exceptions for'+#13+'those paths on which could introduce a security vulnerability!'+#13++#13+'<RED>WARNING</RED>: Doing this significantly slows down the load time of the program'+#13+'settings list in the exploit protection section of the Windows security application'+#13+'but it will load eventually!',TabOrder,Top,Left);
+        RdbSecurityOptions[SO_MandatoryASLR].Checked:=ReplayChoice('Add mandatory ASLR security exceptions','Auto')='Enabled';
+    end;
 
 #ifdef HAVE_EXPERIMENTAL_OPTIONS
     (*
@@ -2344,43 +2508,56 @@ begin
 #endif
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_REBASE
-    RdbExperimentalOptions[GP_BuiltinRebase]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental, built-in rebase','<RED>(NEW!)</RED> Use the experimental built-in rebase (about 70% faster, but only'+#13+'lightly tested).',TabOrder,Top,Left);
+    RdbExperimentalOptions[GP_BuiltinRebase]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental, built-in rebase','Use the experimental built-in rebase (about 70% faster, but only'+#13+'lightly tested).',TabOrder,Top,Left);
 
     // Restore the settings chosen during a previous install
     RdbExperimentalOptions[GP_BuiltinRebase].Checked:=ReplayChoice('Enable Builtin Rebase','Auto')='Enabled';
 #endif
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_STASH
-    RdbExperimentalOptions[GP_BuiltinStash]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental, built-in stash','<RED>(NEW!)</RED> Use the experimental built-in stash (about 90% faster, but only'+#13+'lightly tested).',TabOrder,Top,Left);
+    RdbExperimentalOptions[GP_BuiltinStash]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental, built-in stash','Use the experimental built-in stash (about 90% faster, but only'+#13+'lightly tested).',TabOrder,Top,Left);
 
     // Restore the settings chosen during a previous install
     RdbExperimentalOptions[GP_BuiltinStash].Checked:=ReplayChoice('Enable Builtin Stash','Auto')='Enabled';
 #endif
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_ADD_I
-    RdbExperimentalOptions[GP_BuiltinAddI]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental, built-in add -i/-p','<RED>(NEW!)</RED> Use the experimental built-in interactive add ("git add -i" or "git add -p").'+#13+'This makes it faster (especially the startup!), but it is not yet considered robust.',TabOrder,Top,Left);
+    RdbExperimentalOptions[GP_BuiltinAddI]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental, built-in add -i/-p','Use the experimental built-in interactive add ("git add -i" or "git add -p").'+#13+'This makes it faster (especially the startup!), but it is not yet considered robust.',TabOrder,Top,Left);
 
     // Restore the settings chosen during a previous install
     RdbExperimentalOptions[GP_BuiltinAddI].Checked:=ReplayChoice('Enable Builtin Interactive Add','Auto')='Enabled';
 #endif
 
 #ifdef WITH_EXPERIMENTAL_PCON
-    RdbExperimentalOptions[GP_EnablePCon]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental support for pseudo consoles.','<RED>(NEW!)</RED> This allows running native console programs like Node or Python in a'+#13+'Git Bash window without using winpty, but it still has known bugs.',TabOrder,Top,Left);
+    RdbExperimentalOptions[GP_EnablePCon]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental support for pseudo consoles.','This allows running native console programs like Node or Python in a'+#13+'Git Bash window without using winpty, but is unfortunately not quite stable yet.',TabOrder,Top,Left);
 
     // Restore the settings chosen during a previous install
     RdbExperimentalOptions[GP_EnablePCon].Checked:=ReplayChoice('Enable Pseudo Console Support','Auto')='Enabled';
 #endif
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_FSMONITOR
-    RdbExperimentalOptions[GP_EnableFSMonitor]:=CreateCheckBox(ExperimentalOptionsPage,'Enable experimental built-in file system monitor','<RED>(NEW!)</RED> Automatically run a <A HREF=https://github.com/git-for-windows/git/discussions/3251>built-in file system watcher</A>, to speed up common'+#13+'operations such as `git status`, `git add`, `git commit`, etc in worktrees'+#13+'containing many files.',TabOrder,Top,Left);
+    WasFSMonitorEnabled:=ReplayChoice('Enable FSMonitor','Auto')='Enabled';
+    Data:='<RED>The FSMonitor feature is no longer experimental, and now needs to be'+#13+'configured per repository via the core.fsmonitor config setting.</RED>';
+    if not WasFSMonitorEnabled then
+        Data:=''; // Avoid rendering in red because we want to hide the option, and the way we render red text, it is added as separate `TLabel` that would _still_ be shown.
+    RdbExperimentalOptions[GP_EnableFSMonitor]:=CreateCheckBox(ExperimentalOptionsPage,'Built-in file system monitor',Data,TabOrder,Top,Left);
 
     // Restore the settings chosen during a previous install
-    RdbExperimentalOptions[GP_EnableFSMonitor].Checked:=ReplayChoice('Enable FSMonitor','Auto')='Enabled';
+    RdbExperimentalOptions[GP_EnableFSMonitor].Checked:=WasFSMonitorEnabled;
+    // FSMonitor is no longer experimental, and it is also no longer supported to be enabled by the installer for all repositories.
+    RdbExperimentalOptions[GP_EnableFSMonitor].Enabled:=False;
+    // If the FSMonitor was not enabled previously, do not even bother to show the option.
+    if not WasFSMonitorEnabled then
+        RdbExperimentalOptions[GP_EnableFSMonitor].Visible:=False;
 #endif
 
 #endif
 
     PageIDBeforeInstall:=CurrentCustomPageID;
+#ifdef HAVE_EXPERIMENTAL_OPTIONS
+    if (PageIDBeforeInstall=ExperimentalOptionsPage.ID) and IsHiddenExperimentalOptionsPageEmpty then
+        PageIDBeforeInstall:=PageIDBeforeInstall-1;
+#endif
 
     (*
      * Create a custom page for finding the processes that lock a module.
@@ -2426,8 +2603,9 @@ end;
 
 function ShouldSkipPage(PageID:Integer):Boolean;
 var
-    Msg,Cmd,StdOut,StdErr:String;
-    Res:DWORD;
+    Msg,Cmd:String;
+    Res:Integer;
+    Output:TExecOutput;
 begin
     if (ProcessesPage<>NIL) and (PageID=ProcessesPage.ID) then begin
         // This page is only reached forward (by pressing "Next", never by pressing "Back").
@@ -2436,9 +2614,9 @@ begin
             if DirExists(AppDir) then begin
                 if not FileExists(ExpandConstant('{tmp}\blocked-file-util.exe')) then
                     ExtractTemporaryFile('blocked-file-util.exe');
-                Cmd:='"'+ExpandConstant('{tmp}\blocked-file-util.exe')+'" blocking-pids "'+AppDir+'"';
-                if not ExecWithCapture(Cmd,StdOut,StdErr,Res) or (Res<>0) then begin
-                    Msg:='Skipping installation because '+AppDir+' is still in use:'+#13+#10+StdErr;
+                Cmd:=ExpandConstant('{tmp}\blocked-file-util.exe');
+                if not ExecAndCaptureOutput(Cmd, 'blocking-pids "'+AppDir+'"', '', SW_SHOWNORMAL, ewWaitUntilTerminated, Res, Output) or (Res<>0) then begin
+                    Msg:='Skipping installation because '+AppDir+' is still in use:'+#13+#10+StringJoin(#13+#10,Output.StdErr);
                     if ParamIsSet('SKIPIFINUSE') or (ExpandConstant('{log}')='') then
                         LogError(Msg)
                     else
@@ -2456,7 +2634,13 @@ begin
             Result:=False
         else
             Result:=(PageID<>wpInfoBefore) and (PageID<>wpFinished);
-    end else
+    end
+#ifdef HAVE_EXPERIMENTAL_OPTIONS
+    else if (PageID=ExperimentalOptionsPage.ID) and IsHiddenExperimentalOptionsPageEmpty then
+        // Skip experimental options page if all options are hidden
+        Result:=True
+#endif
+    else
         Result:=False;
 #ifdef DEBUG_WIZARD_PAGE
     Result:=PageID<>DebugWizardPage
@@ -2491,7 +2675,6 @@ end;
 function NextButtonClick(CurPageID:Integer):Boolean;
 var
     i,j:Integer;
-    Version:TWindowsVersion;
     Msg:String;
 begin
     // On a silent install, if your NextButtonClick function returns False
@@ -2624,7 +2807,7 @@ begin
     end;
 
     if not LinkCreated then begin
-        if not FileCopy(AppDir+'\tmp\git-wrapper.exe',FileName,False) then begin
+        if not CopyFile(AppDir+'\{#MINGW_BITNESS}\share\git\git-wrapper.exe',FileName,False) then begin
             Log('Line {#__LINE__}: Creating copy "'+FileName+'" failed.');
             // This is not a critical error, Git could basically be used without the
             // aliases for built-ins, so we continue.
@@ -2635,7 +2818,7 @@ end;
 procedure QueryUninstallValues;
 var
     Domain:Integer;
-    Key,Path:String;
+    Key:String;
 begin
     Key:='Microsoft\Windows\CurrentVersion\Uninstall\Git_is1';
     if RegKeyExists(HKEY_LOCAL_MACHINE,'Software\Wow6432Node\'+Key) then begin
@@ -2665,24 +2848,24 @@ end;
 
 procedure CleanupWhenUpgrading;
 var
-    StdOut,StdErr:String;
-    ErrorCode:DWORD;
+    ErrorCode:Integer;
+    Output:TExecOutput;
 begin
     if UninstallAppPath<>'' then begin
         // Save a copy of the system config so that we can copy it back later
         if FileExists(UninstallAppPath+'\{#MINGW_BITNESS}\etc\gitconfig') then begin
-            if (not FileCopy(UninstallAppPath+'\{#MINGW_BITNESS}\etc\gitconfig',ExpandConstant('{tmp}\gitconfig.system'),True)) then
+            if (not CopyFile(UninstallAppPath+'\{#MINGW_BITNESS}\etc\gitconfig',ExpandConstant('{tmp}\gitconfig.system'),True)) then
                 LogError('Could not save system config; continuing anyway');
         // Save a copy of the system config so that we can copy it back later
         end else if FileExists(UninstallAppPath+'\etc\gitconfig') and
-            (not FileCopy(UninstallAppPath+'\etc\gitconfig',ExpandConstant('{tmp}\gitconfig.system'),True)) then
+            (not CopyFile(UninstallAppPath+'\etc\gitconfig',ExpandConstant('{tmp}\gitconfig.system'),True)) then
             LogError('Could not save system config; continuing anyway');
     end;
 
     if UninstallString<>'' then begin
         WizardForm.StatusLabel.Caption:='Removing previous Git version ('+PreviousGitForWindowsVersion+')';
-        if not ExecWithCapture(UninstallString+' /VERYSILENT /SILENT /NORESTART /SUPPRESSMSGBOXES',StdOut,StdErr,ErrorCode) then
-            LogError('Could not uninstall previous version (stderr: '+StdErr+'). Trying to continue anyway.');
+        if not ExecAndCaptureOutput(RemoveQuotes(UninstallString),'/VERYSILENT /SILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ErrorCode, Output) then
+            LogError('Could not uninstall previous version (stderr: '+StringJoin(#13+#10,Output.StdErr)+'). Trying to continue anyway.');
     end;
 end;
 
@@ -2699,7 +2882,7 @@ begin
     end;
 
     if not LinkCreated then begin
-        if not FileCopy(Source,Target,False) then begin
+        if not CopyFile(Source,Target,False) then begin
             Log('Line {#__LINE__}: Creating copy "'+Target+'" failed.');
         end;
     end;
@@ -2788,7 +2971,6 @@ end;
 
 procedure InstallWindowsTerminalFragment;
 var
-    Res:Longint;
     AppPath,JSONDirectory,JSONPath:String;
 begin
     if IsAdminInstallMode() then
@@ -2809,7 +2991,7 @@ begin
         '      {'+
         '        "guid": "{2ece5bfe-50ed-5f3a-ab87-5cd4baafed2b}",'+
         '        "name": "Git Bash",'+
-        '        "commandline": "'+AppPath+'/bin/bash.exe -i -l",'+
+        '        "commandline": "\"'+AppPath+'/bin/bash.exe\" -i -l",'+
         '        "icon": "'+AppPath+'/{#MINGW_BITNESS}/share/git/git-for-windows.ico",'+
         '        "startingDirectory": "%USERPROFILE%"'+
         '      }'+
@@ -2893,10 +3075,11 @@ end;
 
 function UpgradeFromDotNetBasedScalar:Boolean;
 var
-    RegKey,UninstallScalar,ScalarExe,Cmd,StdOut,StdErr:String;
-    Res:DWORD;
+    RegKey,UninstallScalar,ScalarExe,Cmd:String;
+    Res:Integer;
     Enlistments:TArrayOfString;
     i:Integer;
+    Output:TExecOutput;
 begin
     Result:=True;
 
@@ -2931,15 +3114,14 @@ begin
     // (leaving C:\ProgramData\Scalar in place, in case
     // the user needs to downgrade again to get unblocked)
     WizardForm.StatusLabel.Caption:='Uninstalling .NET-based Scalar';
-    Cmd:=UninstallScalar+'/VERYSILENT /SILENT /NORESTART /SUPPRESSMSGBOXES /LOG';
-    if (not ExecWithCapture(Cmd,StdOut,StdErr,Res)) or (Res<>0) then
-        LogError('Could not uninstall Scalar (stderr: '+StdErr+'). Trying to continue anyway.');
+    if (not ExecAndCaptureOutput(RemoveQuotes(UninstallScalar), '/VERYSILENT /SILENT /NORESTART /SUPPRESSMSGBOXES /LOG', '', SW_SHOWNORMAL, ewWaitUntilTerminated, Res, Output)) or (Res<>0) then
+        LogError('Could not uninstall Scalar (stderr: '+StringJoin(#13+#10,Output.StdErr)+'). Trying to continue anyway.');
 end;
 
 procedure CurStepChanged(CurStep:TSetupStep);
 var
-    DllPath,FileName,Cmd,Msg,Ico:String;
-    BuiltIns,ImageNames,EnvPath:TArrayOfString;
+    FileName,Cmd,Msg,Ico:String;
+    BuiltIns,EnvPath:TArrayOfString;
     Count,i:Longint;
     RootKey:Integer;
 begin
@@ -2967,12 +3149,12 @@ begin
     AppDir:=ExpandConstant('{app}');
 
     {
-        Copy dlls from "/mingw64/bin" to "/mingw64/libexec/git-core" if they are
+        Copy dlls from "/ucrt64/bin" to "/ucrt64/libexec/git-core" if they are
         conflicting with system ones. For example, if a dll named "ssleay32.dll" in
-        "/mingw64/bin" is also present in "%SystemRoot\System32", the version in
-        "/mingw64/bin" is copied to "/mingw64/libexec/git-core". This call ensures
-        that the dll in "/mingw64/libexec/git-core" is picked first when Windows load
-        dll dependencies for executables in "/mingw64/libexec/git-core".
+        "/ucrt64/bin" is also present in "%SystemRoot\System32", the version in
+        "/ucrt64/bin" is copied to "/ucrt64/libexec/git-core". This call ensures
+        that the dll in "/ucrt64/libexec/git-core" is picked first when Windows load
+        dll dependencies for executables in "/ucrt64/libexec/git-core".
         (See https://github.com/git-for-windows/git/issues/145)
     }
 
@@ -2984,6 +3166,8 @@ begin
     }
 
     WizardForm.StatusLabel.Caption:='Creating some Cygwin symlinks';
+    if (not ForceDirectories(AppDir+'\dev')) then
+        LogError('Failed to create /dev; continuing anyway');
     CreateCygwinSymlink(AppDir+'\dev\fd','/proc/self/fd');
     CreateCygwinSymlink(AppDir+'\dev\stdin','/proc/self/fd/0');
     CreateCygwinSymlink(AppDir+'\dev\stdout','/proc/self/fd/1');
@@ -3009,11 +3193,6 @@ begin
             end;
         end;
 
-        // Copy git-wrapper to the temp directory.
-        if not FileCopy(AppDir+'\{#MINGW_BITNESS}\libexec\git-core\git-log.exe',AppDir+'\tmp\git-wrapper.exe',False) then begin
-            Log('Line {#__LINE__}: Creating copy "'+AppDir+'\tmp\git-wrapper.exe" failed.');
-        end;
-
         // Create built-ins as aliases for git.exe.
         for i:=0 to Count do begin
             FileName:=AppDir+'\{#MINGW_BITNESS}\bin\'+BuiltIns[i];
@@ -3029,14 +3208,10 @@ begin
             end;
         end;
 
-        if IsComponentSelected('gitlfs') then begin
+        if WizardIsComponentSelected('gitlfs') then begin
             HardlinkOrCopyGit(AppDir+'\cmd\git-lfs.exe',False);
         end;
 
-        // Delete git-wrapper from the temp directory.
-        if not DeleteFile(AppDir+'\tmp\git-wrapper.exe') then begin
-            Log('Line {#__LINE__}: Deleting temporary "'+AppDir+'\tmp\git-wrapper.exe" failed.');
-        end;
     end else
         LogError('Line {#__LINE__}: Unable to read file "{#MINGW_BITNESS}\{#APP_BUILTINS}".');
 
@@ -3045,7 +3220,7 @@ begin
         if (not ForceDirectories(AppDir+'\{#ETC_GITCONFIG_DIR}')) then
             LogError('Failed to create \{#ETC_GITCONFIG_DIR}; continuing anyway')
         else
-            FileCopy(ExpandConstant('{tmp}\gitconfig.system'),AppDir+'\{#ETC_GITCONFIG_DIR}\gitconfig',True)
+            CopyFile(ExpandConstant('{tmp}\gitconfig.system'),AppDir+'\{#ETC_GITCONFIG_DIR}\gitconfig',True)
     end;
 
     {
@@ -3069,7 +3244,9 @@ begin
         GitSystemConfigSet('http.sslBackend','openssl');
 
     if not RdbCurlVariant[GC_WinSSL].Checked then begin
-        Cmd:=AppDir+'/{#MINGW_BITNESS}/ssl/certs/ca-bundle.crt';
+        Cmd:=AppDir+'/{#MINGW_BITNESS}/etc/ssl/certs/ca-bundle.crt';
+        if not FileExists(Cmd) then
+            Cmd:=AppDir+'/{#MINGW_BITNESS}/ssl/certs/ca-bundle.crt';
         StringChangeEx(Cmd,'\','/',True);
         GitSystemConfigSet('http.sslCAInfo',Cmd);
     end else
@@ -3119,8 +3296,8 @@ begin
     if RdbGitCredentialManager[GCM_None].checked then begin
         GitSystemConfigSet('credential.helper',#0);
         GitSystemConfigSet('credential.https://dev.azure.com.useHttpPath',#0);
-    end else if RdbGitCredentialManager[GCM_Core].checked then begin
-        GitSystemConfigSet('credential.helper','manager-core');
+    end else if RdbGitCredentialManager[GCM].checked then begin
+        GitSystemConfigSet('credential.helper','manager');
         GitSystemConfigSet('credential.https://dev.azure.com.useHttpPath','true');
     end;
 
@@ -3141,6 +3318,12 @@ begin
     {
         Configure experimental options
     }
+
+    if (SecurityOptionsPage<>Nil) then begin
+        WizardForm.StatusLabel.Caption:='Configuring security'
+        if RdbSecurityOptions[SO_MandatoryASLR].checked then
+            Exec('powershell.exe', ExpandConstant('-ExecutionPolicy Bypass -File "{app}/cmd/aslr-manager.ps1" -Action Disable "usr/bin"'), ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, i);
+    end;
 
     WizardForm.StatusLabel.Caption:='Configuring experimental options';
 #ifdef WITH_EXPERIMENTAL_BUILTIN_DIFFTOOL
@@ -3172,16 +3355,22 @@ begin
 #endif
 
 #ifdef WITH_EXPERIMENTAL_PCON
-    if RdbExperimentalOptions[GP_EnablePCon].checked and
-       not SaveStringToFile(ExpandConstant('{app}\etc\git-bash.config'),'MSYS=enable_pcon',False) then
-        LogError('Could not write to '+ExpandConstant('{app}\etc\git-bash.config'));
+    if RdbExperimentalOptions[GP_EnablePCon].checked then begin
+        if not SaveStringToFile(ExpandConstant('{app}\etc\git-bash.config'),'MSYS=enable_pcon',False) then begin
+            LogError('Could not write to '+ExpandConstant('{app}\etc\git-bash.config'))
+        end
+    end else begin
+        if not SaveStringToFile(ExpandConstant('{app}\etc\git-bash.config'),'MSYS=disable_pcon',False) then begin
+            LogError('Could not write to '+ExpandConstant('{app}\etc\git-bash.config'))
+        end
+    end;
 #endif
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_FSMONITOR
     if RdbExperimentalOptions[GP_EnableFSMonitor].checked then
-        GitSystemConfigSet('core.useBuiltinFSMonitor','true')
+        GitSystemConfigSet('core.fsmonitor','true')
     else
-        GitSystemConfigSet('core.useBuiltinFSMonitor',#0);
+        GitSystemConfigSet('core.fsmonitor',#0);
 #endif
 
     {
@@ -3217,7 +3406,7 @@ begin
         GitSystemConfigSet('init.defaultBranch','{#DEFAULT_BRANCH_NAME}');
 
     // Get the current user's directories in PATH.
-    EnvPath:=GetEnvStrings('PATH',IsAdminLoggedOn);
+    EnvPath:=GetEnvStrings('PATH',IsAdmin);
 
     // Modify the PATH variable as requested by the user.
     if RdbPath[GP_Cmd].Checked or RdbPath[GP_CmdTools].Checked then begin
@@ -3243,7 +3432,7 @@ begin
     end;
 
     // Set the current user's PATH directories.
-    if not SetEnvStrings('PATH',EnvPath,True,IsAdminLoggedOn,True) then
+    if not SetEnvStrings('PATH',EnvPath,True,IsAdmin,True) then
         LogError('Line {#__LINE__}: Unable to set the PATH environment variable.');
 
     {
@@ -3254,7 +3443,7 @@ begin
     Cmd:=AppDir+'\git-bash.exe';
     FileName:=AppDir+'\{#MINGW_BITNESS}\share\git\git-for-windows.ico';
 
-    if IsComponentSelected('icons\quicklaunch') then begin
+    if WizardIsComponentSelected('icons\quicklaunch') then begin
         CreateShellLink(
             ExpandConstant('{userappdata}\Microsoft\Internet Explorer\Quick Launch\Git Bash.lnk')
         ,   'Git Bash'
@@ -3267,7 +3456,7 @@ begin
         );
     end;
 
-    if IsComponentSelected('icons\desktop') then begin
+    if WizardIsComponentSelected('icons\desktop') then begin
         CreateShellLink(
             GetShellFolder('desktop')+'\Git Bash.lnk'
         ,   'Git Bash'
@@ -3285,14 +3474,14 @@ begin
     }
 
     WizardForm.StatusLabel.Caption:='Initializing Explorer integration';
-    if IsAdminLoggedOn then begin
+    if IsAdmin then begin
         RootKey:=HKEY_LOCAL_MACHINE;
     end else begin
         RootKey:=HKEY_CURRENT_USER;
     end;
 
-    if IsComponentSelected('ext\shellhere') then begin
-        Msg:='Git Ba&sh Here';
+    if WizardIsComponentSelected('ext\shellhere') then begin
+        Msg:='Open Git Ba&sh here';
         Cmd:='"'+AppDir+'\git-bash.exe" "--cd=%1"';
         Ico:=AppDir+'\git-bash.exe';
         if (not RegWriteStringValue(RootKey,'SOFTWARE\Classes\Directory\shell\git_shell','',Msg)) or
@@ -3308,8 +3497,8 @@ begin
             LogError('Line {#__LINE__}: Unable to create "Git Bash Here" shell extension.');
     end;
 
-    if IsComponentSelected('ext\guihere') then begin
-        Msg:='Git &GUI Here';
+    if WizardIsComponentSelected('ext\guihere') then begin
+        Msg:='Open Git &GUI here';
         Cmd:='"'+AppDir+'\cmd\git-gui.exe" "--working-dir" "%1"';
         Ico:=AppDir+'\cmd\git-gui.exe';
         if (not RegWriteStringValue(RootKey,'SOFTWARE\Classes\Directory\shell\git_gui','',Msg)) or
@@ -3330,7 +3519,7 @@ begin
         Optionally disable Git LFS completely
     }
 
-    if not IsComponentSelected('gitlfs') then begin
+    if not WizardIsComponentSelected('gitlfs') then begin
         WizardForm.StatusLabel.Caption:='Removing bundled Git LFS';
         if not DeleteFile(AppDir+'\{#MINGW_BITNESS}\bin\git-lfs.exe') and not DeleteFile(AppDir+'\{#MINGW_BITNESS}\libexec\git-core\git-lfs.exe') then
             LogError('Line {#__LINE__}: Unable to delete "git-lfs.exe".');
@@ -3341,7 +3530,7 @@ begin
     }
 
 #ifdef WITH_SCALAR
-    if not IsComponentSelected('scalar') then begin
+    if not WizardIsComponentSelected('scalar') then begin
         WizardForm.StatusLabel.Caption:='Removing bundled Scalar';
         // Remove scalar.exe from Git for Windows' files
         if not DeleteFile(AppDir+'\cmd\scalar.exe') or
@@ -3360,7 +3549,7 @@ begin
         Create the Windows Terminal integration
     }
 
-    if IsComponentSelected('windowsterminal') then begin
+    if WizardIsComponentSelected('windowsterminal') then begin
         WizardForm.StatusLabel.Caption:='Writing Windows Terminal Profile';
         InstallWindowsTerminalFragment();
     end;
@@ -3413,6 +3602,8 @@ begin
         GitSystemConfigSet('core.editor','notepad')
     else if (CbbEditor.ItemIndex=GE_Wordpad) then
         GitSystemConfigSet('core.editor','wordpad')
+    else if (CbbEditor.ItemIndex=GE_MicrosoftEdit) then
+        GitSystemConfigSet('core.editor','edit')
     else if ((CbbEditor.ItemIndex=GE_CustomEditor)) and (PathIsValidExecutable(CustomEditorPath)) then
         GitSystemConfigSet('core.editor','"'+CustomEditorPath+'" '+CustomEditorOptions);
 
@@ -3483,6 +3674,8 @@ begin
         Data:='Notepad';
     end else if (CbbEditor.ItemIndex=GE_Wordpad) then begin
         Data:='Wordpad';
+    end else if (CbbEditor.ItemIndex=GE_MicrosoftEdit) then begin
+        Data:='MicrosoftEdit';
     end else if (CbbEditor.ItemIndex=GE_CustomEditor) then begin
         Data:='CustomEditor'
         CustomEditorData:=EditorPage.Values[0];
@@ -3524,9 +3717,9 @@ begin
     RecordChoice(PreviousDataKey,'Tortoise Option',Data2);
 
     // HTTPS implementation (cURL) options.
-    Data:='OpenSSL';
-    if RdbCurlVariant[GC_WinSSL].Checked then begin
-        Data:='WinSSL';
+    Data:='WinSSL';
+    if RdbCurlVariant[GC_OpenSSL].Checked then begin
+        Data:='OpenSSL';
     end;
     RecordChoice(PreviousDataKey,'CURL Option',Data);
 
@@ -3559,8 +3752,8 @@ begin
 
     // Credential helper.
     Data:='Disabled';
-    if RdbGitCredentialManager[GCM_Core].Checked then begin;
-        Data:='Core';
+    if RdbGitCredentialManager[GCM].Checked then begin;
+        Data:='Enabled';
     end;
     RecordChoice(PreviousDataKey,'Use Credential Manager',Data);
 
@@ -3575,6 +3768,15 @@ begin
         Data:='Enabled';
     end;
     RecordChoice(PreviousDataKey,'Enable Symlinks',Data);
+
+    // Security options.
+    if (SecurityOptionsPage<>Nil) then begin
+        Data:='Disabled';
+        if RdbSecurityOptions[SO_MandatoryASLR].Checked then begin
+            Data:='Enabled';
+        end;
+        RecordChoice(PreviousDataKey,'Add Mandatory ASLR security exceptions',Data);
+    end;
 
     // Experimental options.
 #ifdef WITH_EXPERIMENTAL_BUILTIN_DIFFTOOL
@@ -3619,9 +3821,6 @@ begin
 
 #ifdef WITH_EXPERIMENTAL_BUILTIN_FSMONITOR
     Data:='Disabled';
-    if RdbExperimentalOptions[GP_EnableFSMonitor].Checked then begin
-        Data:='Enabled';
-    end;
     RecordChoice(PreviousDataKey,'Enable FSMonitor',Data);
 #endif
 
@@ -3642,11 +3841,9 @@ var
 begin
     Result:=True;
 
-    Form:=CreateCustomForm;
+    Form:=CreateCustomForm(ScaleX(500), ScaleY(256), False, False);
     try
         Form.Caption:='Git Uninstall: Removing in-use files';
-        Form.ClientWidth:=ScaleX(500);
-        Form.ClientHeight:=ScaleY(256);
 
         Info:=TLabel.Create(Form);
         with Info do begin
@@ -3776,7 +3973,7 @@ begin
     PathOption:=GetPreviousData('Path Option','BashOnly');
     if (PathOption='Cmd') or (PathOption='CmdTools') then begin
         // Get the current user's directories in PATH.
-        EnvPath:=GetEnvStrings('PATH',IsAdminLoggedOn);
+        EnvPath:=GetEnvStrings('PATH',IsAdmin);
 
         // Remove the installation directory from PATH.
         for i:=0 to GetArrayLength(EnvPath)-1 do begin
@@ -3786,7 +3983,7 @@ begin
         end;
 
         // Reset the current user's directories in PATH.
-        if not SetEnvStrings('PATH',EnvPath,True,IsAdminLoggedOn,True) then
+        if not SetEnvStrings('PATH',EnvPath,True,IsAdmin,True) then
             LogError('Line {#__LINE__}: Unable to revert any possible changes to PATH.');
     end;
 

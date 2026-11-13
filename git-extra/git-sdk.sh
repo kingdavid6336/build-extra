@@ -72,12 +72,28 @@ sdk () {
 		'') break;;
 		-*) sdk die "Unknown option: %s\n" "$1"; return 1;;
 		esac; do shift; done &&
-		case "$(uname -m)" in
-		i686) bitness=" 32-bit";;
-		x86_64) bitness=" 64-bit";;
-		*) bitness=;;
+		case "$MSYSTEM" in
+		MINGW32) shortcut_suffix=" 32-bit";;
+		MINGW64) shortcut_suffix=" mingw64";;
+		UCRT64) shortcut_suffix=" 64-bit";;
+		CLANGARM64) shortcut_suffix=" arm64";;
+		MSYS)
+			case "$(uname -m)" in
+			i686) shortcut_suffix=" 32-bit";;
+			x86_64)
+				if test -d /clangarm64
+				then
+					shortcut_suffix=" arm64"
+				else
+					shortcut_suffix=" 64-bit"
+				fi
+				;;
+			*) shortcut_suffix=;;
+			esac
+			;;
+		*) shortcut_suffix=;;
 		esac &&
-		desktop_icon_path="Git SDK$bitness.lnk" &&
+		desktop_icon_path="Git SDK$shortcut_suffix.lnk" &&
 		desktop_icon_path="$(create-shortcut.exe -n --desktop-shortcut /git-bash.exe "$desktop_icon_path" |
 			sed -n 's/^destination: //p')" &&
 		if test -n "$force" || test ! -f "$desktop_icon_path"
@@ -105,14 +121,13 @@ sdk () {
 			mingw-w64-curl \
 			mingw-w64-cv2pdb \
 			mingw-w64-git \
-			mingw-w64-git-credential-manager-core \
+			mingw-w64-git-credential-manager \
 			mingw-w64-git-lfs \
 			mingw-w64-git-sizer \
 			mingw-w64-wintoast \
 			bash \
 			curl \
 			gawk \
-			git-flow \
 			gnupg \
 			heimdal \
 			mintty \
@@ -140,6 +155,7 @@ sdk () {
 	# for building
 	makepkg|makepkg-mingw)
 		cmd=$1; shift
+		WITH_PDBS="$(! grep -q WITH_PDBS PKGBUILD || ! sdk find_mspdb_dll || echo true)" \
 		WITHOUT_PDBS="$(! grep -q WITHOUT_PDBS PKGBUILD || sdk find_mspdb_dll || echo true)" \
 		MAKEFLAGS=${MAKEFLAGS:--j$(nproc)} PKGEXT='.pkg.tar.xz' $cmd --syncdeps --noconfirm --skipchecksums --skippgpcheck "$@"
 		;;
@@ -175,7 +191,7 @@ sdk () {
 			;;
 		git-extra|git-for-windows-keyring|mingw-w64-cv2pdb|\
 		mingw-w64-git-lfs|\
-		mingw-w64-git-credential-manager-core|\
+		mingw-w64-git-credential-manager|\
 		mingw-w64-git-sizer|mingw-w64-wintoast|installer)
 			sdk init-lazy build-extra &&
 			src_dir="$src_dir/$2" ||
@@ -206,11 +222,21 @@ sdk () {
 			MINGW_MOUNT_POINT=/mingw32
 			;;
 		x86_64)
-			MSYSTEM=MINGW64
-			MINGW_MOUNT_POINT=/mingw64
+			if test -d /clangarm64
+			then
+				MSYSTEM=CLANGARM64
+				MINGW_MOUNT_POINT=/clangarm64
+			elif test -d /ucrt64
+			then
+				MSYSTEM=UCRT64
+				MINGW_MOUNT_POINT=/ucrt64
+			else
+				MSYSTEM=MINGW64
+				MINGW_MOUNT_POINT=/mingw64
+			fi
 			;;
 		*)
-			sdk die "Could not determine bitness"
+			sdk die "Could not determine CPU architecture"
 			return 1
 			;;
 		esac
@@ -226,13 +252,17 @@ sdk () {
 			unset MINGW_MOUNT_POINT
 			PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig:/lib/pkgconfig"
 			second_path=$first_path
-			first_path=/usr/bin:/opt/bin
+			first_path=/cmd:/usr/bin:/opt/bin
 			;;
 		esac
 		. /etc/msystem
 
-		PATH="$first_path:$second_path:$(echo "$PATH" |
-			sed -e "s|:\($first_path\|$second_path\)/\?:|:|g")"
+		PATH="$(echo "$first_path:$second_path:$PATH" | awk '
+			# Filter out duplicate and empty entries
+			BEGIN { RS=":" }
+			$0 != "" && !seen[$0]++ { out = (out ? out ":" $0 : $0) }
+			END { print out }
+		')"
 		return $?
 		;;
 	init)
@@ -294,7 +324,7 @@ sdk () {
 				https://github.com/Cygwin/cygwin;; esac
 			case "$remotes" in *"msys2	"*) ;;
 			*) git -C "$src_dir" remote add -f msys2 \
-				https://github.com/Alexpux/Cygwin;; esac
+				https://github.com/msys2/msys2-runtime;; esac
 			case "$remotes" in *"git-for-windows	"*) ;;
 			*) git -C "$src_dir" remote add -f \
 				git-for-windows \
@@ -339,6 +369,7 @@ sdk () {
 				  git diff-index --quiet HEAD ||
 				  test ! -s .git/index ||
 				  (uname_m="$(uname -m)" &&
+				    test ! -d "../build-$uname_m-pc-cygwin/$uname_m-pc-cygwin/winsup/cygwin" &&
 				    test ! -d "../build-$uname_m-pc-msys/$uname_m-pc-msys/winsup/cygwin"); }
 			then
 				# no local changes
@@ -349,7 +380,12 @@ sdk () {
 
 			# Build the current branch
 			(uname_m="$(uname -m)" &&
-			 cd "../build-$uname_m-pc-msys/$uname_m-pc-msys/winsup/cygwin" &&
+			 if test -d "../build-$uname_m-pc-cygwin/$uname_m-pc-cygwin/winsup/cygwin"
+			 then
+				cd "../build-$uname_m-pc-cygwin/$uname_m-pc-cygwin/winsup/cygwin"
+			 else
+				cd "../build-$uname_m-pc-msys/$uname_m-pc-msys/winsup/cygwin"
+			 fi &&
 			 make -j$(nproc))
 			return $?
 			;;
@@ -360,7 +396,7 @@ sdk () {
 			then
 				case "$MSYSTEM" in
 				MSYS) sdk makepkg -f;;
-				MINGW*) MINGW_ARCH=${MSYSTEM,,} sdk makepkg-mingw -f;;
+				CLANGARM*|MINGW*|UCRT*) MINGW_ARCH=${MSYSTEM,,} sdk makepkg-mingw -f;;
 				esac
 				return $?
 			fi
@@ -436,7 +472,12 @@ EOF
 		;;
 	esac
 }
-GIT_SDK_SH_PATH="$(realpath "$BASH_SOURCE")"
+
+if [ -n "$ZSH_VERSION" ]; then
+	GIT_SDK_SH_PATH="$(realpath "${(%):-%x}")"
+else
+	GIT_SDK_SH_PATH="$(realpath "$BASH_SOURCE")"
+fi
 
 case $- in
 *i*)

@@ -7,15 +7,32 @@
 # the corresponding password in ~/.sig/codesign.pass.
 
 type osslsigncode >/dev/null 2>&1 || {
-	echo "Could not find osslsigncode.exe in the PATH" >&2
-	exit 1
+	if test -x /clangarm64/bin/osslsigncode.exe
+	then
+		PATH=/clangarm64/bin:$PATH
+	elif test -x /ucrt64/bin/osslsigncode.exe
+	then
+		PATH=/ucrt64/bin:$PATH
+	elif test -x /mingw64/bin/osslsigncode.exe
+	then
+		PATH=/mingw64/bin:$PATH
+	elif test -x /mingw32/bin/osslsigncode.exe
+	then
+		PATH=/mingw32/bin:$PATH
+	else
+		echo "Could not find osslsigncode.exe in the PATH:" >&2
+		echo "$PATH" >&2
+		echo "/ is $(cygpath -aw /)" >&2
+		exit 1
+	fi
 }
 
 s () {
 	osslsigncode.exe sign \
+		-verbose \
 		-pkcs12 "$HOME/.sig/codesign.p12" \
 		-readpass "$HOME/.sig/codesign.pass" \
-		-ts http://timestamp.comodoca.com?td=sha256 \
+		-ts http://timestamp.sectigo.com?td=sha256 \
 		-n "Git for Windows" \
 		-h sha256 "$1" "$1.signed.exe" &&
 	mv -f "$1.signed.exe" "$1"
